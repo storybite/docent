@@ -1,0 +1,5 @@
+__pycache__/
+*.ipynb
+/test
+venv_dcnt
+.streamlit/secrets.toml
