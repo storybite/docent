@@ -43,7 +43,7 @@ streamlit run app.py
 
 ## 기술 스택
 
-- Python 3.8+
+- Python 3.12.1
 - Streamlit
 - Anthropic Claude API
 - python-dotenv
