@@ -2,4 +2,5 @@ __pycache__/
 *.ipynb
 /test
 venv_dcnt
+/scrap/relics
 .streamlit/secrets.toml
