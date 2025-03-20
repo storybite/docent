@@ -1,5 +1,5 @@
 __pycache__/
-*.ipynb
+#*.ipynb
 /test
 venv_dcnt
 /scrap/relics
