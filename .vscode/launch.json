@@ -4,13 +4,26 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-
         {
             "name": "Python Debugger: Current File",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "justMyCode": false,
+        },
+        {
+            "name": "Streamlit: Run Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": [
+                "run",
+                "${file}",
+                /*"${workspaceFolder}/resv/app1.py",*/
+                "--server.port",
+                "8501"
+            ],
+            "justMyCode": false
         }
     ]
 }
