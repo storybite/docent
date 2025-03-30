@@ -15,14 +15,15 @@ def get_base64_data(file_path):
 
 
 system_prompt = """
-당신은 박물관 도슨트입니다. 관람객의 질문에 친절하게 설명하세요.
-채팅 창에 글씨가 너무 많으면 읽기 어려우니 가급적 5문장 이내로 답하세요.
-채팅이 아니라 현장에서 설명하는 것이므로 번호, 대시, 불릿 포인트 등을 사용하지 마세요.
+- 당신은 e-박물관 도슨트입니다. 사용자의 질문에 친절하게 설명하세요.
+- 사용자는 채팅 창에서 왼쪽의 박물관 이미지를 감상 중입니다. 이미지 아래의 [이전]과 [다음]버튼으로 내비케이션 할 수 있습니다.
+- 채팅 창에 글씨가 너무 많으면 읽기 어려우니 가급적 5문장 이내로 답하세요.
+- 현장에서 설명하는 것처럼 말해야 하므로 번호, 대시, 불릿 포인트 등을 사용하지 마세요.
 """
 
 context_prompt = """
 <context>
-지금 제공된 국보/보물 이미지에 대해 설명을 진행해야 합니다.
+[시스템 운영자]지금 제공된 국보/보물 이미지에 대해 설명을 진행해야 합니다.
 </context>
 
 <relic_information>
@@ -31,11 +32,8 @@ context_prompt = """
 </relic_information>
 
 <instructions>
-if 사용자가 현재 작품에 대해 설명을 요청하면:
-    <relic_information/>과 지금 제공된 국보/보물 이미지를 바탕으로 설명을 제공할 것
-elif 사용자가 다음 작품을 보여달라고 요청하면:
-    '[네] 다음 작품을 소개해드리겠습니다.'라고 답할 것([네]라는 문자열은 후속처리를 위해 사용되므로 변경하지 말것)
-    
+- <relic_information/>과 지금 제공된 국보/보물 이미지를 바탕으로 설명을 제공할 것
+- 사용자 대화 중 [시스템 운영자]라는 말머리는 챗봇 시스템 운영자가 당신에게 내리는 명령을 뜻하므로 사용자에게는 이와 관련한 답변을 하지 말 것 
 </instructions>
 """
 
@@ -54,6 +52,8 @@ class Relics:
                     value["img"] = os.path.join(
                         "scrap", "relics", key, os.path.basename(value["img"])
                     )
+                    value["title"] = f"{value['label']['명칭']} ({key})"
+                    value["is_presented"] = False
                 self.relic_ids = list(self.relics.keys())
         except Exception as e:
             import traceback
@@ -62,17 +62,33 @@ class Relics:
             print(msg)
             raise e
 
-    def get_relic(self):
+    def get_current_relic(self):
         self.relic_id = str(self.relic_ids[self.index])
-        return (
-            self.relics[self.relic_id]["label"],
-            self.relics[self.relic_id]["content"],
-            self.relics[self.relic_id]["img"],
-        )
+        return self.relics[self.relic_id]
+        # return (
+        #     self.relics[self.relic_id]["label"],
+        #     self.relics[self.relic_id]["content"],
+        #     self.relics[self.relic_id]["img"],
+        #     self.relics[self.relic_id]["is_presented"],
+        # )
+
+    def get_title(self):
+        return f"{self.relics[self.relic_id]['label']['명칭']} ({self.relic_id})"
+
+    def set_presented(self, is_presented: bool):
+        self.relics[self.relic_id]["is_presented"] = is_presented
+
+    def previous_relic(self):
+        self.index -= 1
+        return self.get_current_relic()
 
     def next_relic(self):
         self.index += 1
-        return self.get_relic()
+        return self.get_current_relic()
+
+    def first_relic(self):
+        self.index = 0
+        return self.get_current_relic()
 
 
 class DocentBot:
@@ -83,15 +99,22 @@ class DocentBot:
         self.model = model_name
         self.messages = [{"role": "assistant", "content": self.hello}]
         self.relics = Relics()
-        self.add_instruction()
+        self.has_moved = False
+        self.has_entered = False
+        self.visitor_status = "NotEntered"
+        # self.add_instruction()
 
-    def get_image_path(self):
-        return self.relics.get_relic()[2]
+    # def get_title_image_path(self):
+    #     label, _, image_path, _ = self.relics.get_relic()
+    #     return f"{label['명칭']} ({self.relics.relic_id})", image_path
 
     def add_instruction(self):
-        label, content, image_path = self.relics.next_relic()
-        print(image_path)
-        __context_prompt__ = context_prompt.format(label=label, content=content)
+        # label, content, image_path = self.relics.next_relic()
+        current_relic = self.relics.get_current_relic()
+        print(current_relic["img"])
+        __context_prompt__ = context_prompt.format(
+            label=current_relic["label"], content=current_relic["content"]
+        )
         self.messages.append(
             {
                 "role": "user",
@@ -101,7 +124,7 @@ class DocentBot:
                         "source": {
                             "type": "base64",
                             "media_type": "image/jpeg",
-                            "data": get_base64_data(image_path),
+                            "data": get_base64_data(current_relic["img"]),
                         },
                     },
                     {
@@ -118,7 +141,25 @@ class DocentBot:
             }
         )
 
+    def notify_navigation(self, title: str):
+        self.messages.append(
+            {
+                "role": "assistant",
+                "content": f"<context>[시스템 운영자]사용자가 {title} 작품을 다시 관림하고 있습니다(1).</context>",
+            }
+        )
+        self.messages.append(
+            {
+                "role": "assistant",
+                "content": "<context>네, 알겠습니다(1).</context>",
+            }
+        )
+
     def create_response(self) -> str:
+        import time
+
+        # time.sleep(1)
+        # return "테스트입니다."
         try:
             # API 호출
             response = client.messages.create(
@@ -129,6 +170,7 @@ class DocentBot:
             )
             # 응답 저장
             response_message = response.content[0].text
+            print(f"response_message: {response_message}")
             return response_message
         except Exception as e:
             return f"Error: {str(e)}"
@@ -136,10 +178,35 @@ class DocentBot:
     def answer(self, user_input: str) -> str:
         self.messages.append({"role": "user", "content": user_input})
         response_message: str = self.create_response()
-        if "[네]" in response_message:
-            self.add_instruction()
+        # if "[네]" in response_message:
+        #     self.add_instruction()
         self.messages.append({"role": "assistant", "content": response_message})
         return response_message
+
+    def present_relic(self):
+        self.add_instruction()
+        response_message: str = self.create_response()
+        self.messages.append({"role": "assistant", "content": response_message})
+        self.relics.set_presented(True)
+        return response_message
+
+    def move(self, next: bool):
+        if next:
+            self.relics.next_relic()
+        else:
+            self.relics.previous_relic()
+
+    def request_presentaion(self):
+        current_relic = self.relics.get_current_relic()
+        if current_relic["is_presented"]:
+            self.notify_navigation(current_relic["title"])
+            return None
+        else:
+            return self.present_relic()
+
+        # else:
+        #     self.present_relic()
+        # return current_relic
 
     def get_conversation(self):
         conversation = []
@@ -150,5 +217,21 @@ class DocentBot:
                 text_message = message["content"].strip()
             if text_message.startswith("<context>"):
                 continue
+
+            if "<context>" in text_message:
+                print(text_message)
             conversation.append({"role": message["role"], "text": text_message})
         return conversation
+
+    def previous_relic(self):
+        return self.relics.previous_relic()
+
+    def next_relic(self):
+        return self.relics.next_relic()
+
+    def first_relic(self):
+        self.messages = []
+        return self.relics.first_relic()
+
+    def get_current_relic(self):
+        return self.relics.get_current_relic()
