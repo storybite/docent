@@ -102,13 +102,10 @@ class DocentBot:
         self.has_moved = False
         self.has_entered = False
         self.visitor_status = "NotEntered"
-        # self.add_instruction()
-
-    # def get_title_image_path(self):
-    #     label, _, image_path, _ = self.relics.get_relic()
-    #     return f"{label['명칭']} ({self.relics.relic_id})", image_path
+        self.revisit_messsage = []
 
     def add_instruction(self):
+        self.revisit = True
         # label, content, image_path = self.relics.next_relic()
         current_relic = self.relics.get_current_relic()
         print(current_relic["img"])
@@ -141,19 +138,17 @@ class DocentBot:
             }
         )
 
-    def notify_navigation(self, title: str):
-        self.messages.append(
+    def write_revisit_message(self, title: str):
+        self.revisit_messsage = [
             {
                 "role": "assistant",
                 "content": f"<context>[시스템 운영자]사용자가 {title} 작품을 다시 관림하고 있습니다(1).</context>",
-            }
-        )
-        self.messages.append(
+            },
             {
                 "role": "assistant",
                 "content": "<context>네, 알겠습니다(1).</context>",
-            }
-        )
+            },
+        ]
 
     def create_response(self) -> str:
         import time
@@ -176,10 +171,11 @@ class DocentBot:
             return f"Error: {str(e)}"
 
     def answer(self, user_input: str) -> str:
+        if not self.revisit_messsage:
+            self.messages.extend(self.revisit_messsage)
+            self.revisit_messsage = []
         self.messages.append({"role": "user", "content": user_input})
         response_message: str = self.create_response()
-        # if "[네]" in response_message:
-        #     self.add_instruction()
         self.messages.append({"role": "assistant", "content": response_message})
         return response_message
 
@@ -195,18 +191,35 @@ class DocentBot:
             self.relics.next_relic()
         else:
             self.relics.previous_relic()
-
-    def request_presentaion(self):
         current_relic = self.relics.get_current_relic()
         if current_relic["is_presented"]:
-            self.notify_navigation(current_relic["title"])
-            return None
+            self.write_revisit_message(current_relic["title"])
         else:
-            return self.present_relic()
+            self.revisit_messsage = []
+            self.relics.previous_relic()
 
-        # else:
-        #     self.present_relic()
-        # return current_relic
+    def move_(self, next: bool):
+        if next:
+            self.relics.next_relic()
+        else:
+            self.relics.previous_relic()
+        current_relic = self.relics.get_current_relic()
+        if current_relic["is_presented"]:
+            self.revisit = True
+        else:
+            self.revisit = False
+
+    # def request_presentaion(self):
+    #     current_relic = self.relics.get_current_relic()
+    #     if current_relic["is_presented"]:
+    #         self.notify_navigation(current_relic["title"])
+    #         return None
+    #     else:
+    #         return self.present_relic()
+
+    # else:
+    #     self.present_relic()
+    # return current_relic
 
     def get_conversation(self):
         conversation = []
@@ -229,9 +242,9 @@ class DocentBot:
     def next_relic(self):
         return self.relics.next_relic()
 
-    def first_relic(self):
-        self.messages = []
-        return self.relics.first_relic()
+    # def first_relic(self):
+    #     self.messages = []
+    #     return self.relics.first_relic()
 
     def get_current_relic(self):
         return self.relics.get_current_relic()

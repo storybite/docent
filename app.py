@@ -77,9 +77,9 @@ st.markdown(
 
         .intro-text {
             text-align: center; 
-            padding: 2rem; 
-            margin-top: 2rem; 
-            border-radius: 0.5rem; 
+            padding: 20px; 
+            margin-top: 20px; 
+            border-radius: 10px; 
             background-color: #f9f9f9; 
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
@@ -92,18 +92,18 @@ st.markdown(
 
 def on_progress(func):
 
-    # overlay_placeholder = st.empty()
-    # # 다음 이미지로 이동
-    # overlay_placeholder.markdown(
-    #     """
-    #     <div class="disable_overlay"></div>
-    #     """,
-    #     unsafe_allow_html=True,
-    # )
+    overlay_placeholder = st.empty()
+    # 다음 이미지로 이동
+    overlay_placeholder.markdown(
+        """
+        <div class="disable_overlay"></div>
+        """,
+        unsafe_allow_html=True,
+    )
     with st.spinner("잠시만 기다려주세요."):
         result = func()
 
-    # overlay_placeholder.empty()
+    overlay_placeholder.empty()
     return result
 
 
@@ -135,10 +135,15 @@ if docent_bot.visitor_status == "NotEntered":
     st.markdown(
         """
         <div class="intro-text">
-            <h2>도슨트 안내</h2>
-            <p>안녕하세요! 저는 AI 도슨트봇입니다.</p>
-            <p>이곳에서는 다양한 작품들의 역사와 배경, 흥미로운 이야기를 소개해 드려요.</p>
-            <p>아래의 <strong>‘입장하기’</strong> 버튼을 눌러 투어를 시작해 보세요!</p>
+            <h2>e-뮤지엄 도슨트 챗봇입니다</h2>
+            <p>안녕하세요! 저희 e-뮤지엄에 오신 것을 환영합니다.<p>
+            <p>
+                저는 e-박물관에서 일하는 도슨트 챗봇이에요.
+                이곳에서는 500여 여종의 대한민국 국보/보물 이미지를 보관하고 있습니다. 역사와 배경은 물론 저의 감상까지도 자세히 말씀드려요!
+            </p>
+            <p>
+                아래의 <strong>‘입장하기’</strong> 버튼을 눌러 투어를 시작해 보세요!
+            </p>            
         </div>
         """,
         unsafe_allow_html=True,
@@ -147,7 +152,7 @@ if docent_bot.visitor_status == "NotEntered":
     # 3개의 컬럼으로 나눈 후 가운데에만 버튼을 배치하여 중앙 정렬
     col_left, col_center, col_right = st.columns([1, 2, 1])
     with col_center:
-        if st.button("입장하기", use_container_width=True):
+        if st.button("입장하기", use_container_width=True, type="primary"):
             docent_bot.first_relic()
             docent_bot.visitor_status = "Entered"
             on_progress(lambda: docent_bot.request_presentaion())
@@ -174,7 +179,8 @@ else:
         )
 
         # 3단계: 좌우 이동 버튼
-        col1, col3 = st.columns([2, 2])
+        # left_splace, col1, center_space, col3, right_space = st.columns([2, 3, 1, 3, 2])
+        col1, col3 = st.columns([1, 1])
         with col1:
             if st.button("이전", use_container_width=True):
                 docent_bot.move(next=False)
