@@ -12,19 +12,19 @@ st.markdown(
     """
     <style>        
         .stSidebar {
-            width: 500px !important;
+            width: 30rem !important;
         }
         
         /* 채팅 메시지 컨테이너의 최대 너비 조정 */
         .stChatMessage {
-            margin-left: -170px;
-            width: 100%;
+            margin-left: -5rem;
+            /*width: 100%;*/
         }
 
         /* Streamlit 기본 입력창 스타일 조정 */
         .stChatInput {
-            margin-left: -170px;
-            padding-right: 100px;            
+            margin-left: -5rem;
+            /*padding-right: 100px;*/
         }
         
         /* 고정 박스 스타일 */
@@ -42,10 +42,23 @@ st.markdown(
             align-items: center;
         }
 
+        .image-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .image-header {
+            font-weight: bold;
+            font-size: 18px;
+            color: #333;
+            margin-top: -20px;
+        }
+
         .image-title {
             font-weight: bold;
             font-size: 18px;
-            margin: 15px 0;
+            margin-bottom: 15px;
             color: #333;
         }
 
@@ -88,6 +101,10 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+if "error_message" in st.session_state and st.session_state.error_message:
+    st.toast(st.session_state.error_message, icon="🚨")
+    st.session_state.error_message = None
 
 
 def on_progress(func):
@@ -153,26 +170,41 @@ if docent_bot.visitor_status == "NotEntered":
     col_left, col_center, col_right = st.columns([1, 2, 1])
     with col_center:
         if st.button("입장하기", use_container_width=True, type="primary"):
-            docent_bot.first_relic()
+            # docent_bot.first_relic()
             docent_bot.visitor_status = "Entered"
-            on_progress(lambda: docent_bot.request_presentaion())
+            on_progress(lambda: docent_bot.move(next=True))
             st.rerun()
 
 else:
     # 이미지 컨테이너 생성
     with st.sidebar:
 
-        title, img_path = (
-            docent_bot.get_current_relic()["title"],
-            docent_bot.get_current_relic()["img"],
+        # 현재 relic 정보를 session_state에 저장/관리
+        if "current_relic" not in st.session_state:
+            st.session_state.current_relic = docent_bot.get_current_relic()
+            st.session_state.header = docent_bot.relics.get_header()
+
+        # 버튼 클릭 시에만 relic 정보 업데이트
+        if "update_relic" in st.session_state and st.session_state.update_relic:
+            st.session_state.current_relic = docent_bot.get_current_relic()
+            st.session_state.header = docent_bot.relics.get_header()
+            st.session_state.update_relic = False
+
+        title, img_path, header = (
+            st.session_state.current_relic["title"],
+            st.session_state.current_relic["img"],
+            st.session_state.header,
+            # docent_bot.relics.get_header(),
+            # st.session_state.current_relic["header"],
         )
 
         with open(img_path, "rb") as img_file:
             img_base64 = base64.b64encode(img_file.read()).decode()
 
         st.markdown(
-            f'<div style="display:flex; flex-direction: column; align-items: center;">'
-            f'<img src="data:image/png;base64,{img_base64}" style="width: 375px; height: 500px; object-fit: contain;">'
+            f'<div class="image-box">'
+            f'<div class="image-header">{header}</div>'
+            f'<img src="data:image/png;base64,{img_base64}" style="width:375px; height:500px; object-fit:contain;">'
             f'<div class="image-title">{title}</div>'
             f"</div>",
             unsafe_allow_html=True,
@@ -183,13 +215,23 @@ else:
         col1, col3 = st.columns([1, 1])
         with col1:
             if st.button("이전", use_container_width=True):
-                docent_bot.move(next=False)
-                on_progress(lambda: docent_bot.request_presentaion())
-                st.rerun()
+                st.session_state.update_relic = (
+                    True  # 다음 실행에서 relic 업데이트 필요
+                )
+                try:
+                    on_progress(lambda: docent_bot.move(next=False))
+                except ValueError as e:
+                    # st.toast(e)
+                    st.session_state.error_message = str(e)
+                finally:
+                    st.rerun()
+
         with col3:
             if st.button("다음", use_container_width=True):
-                docent_bot.move(next=True)
-                on_progress(lambda: docent_bot.request_presentaion())
+                st.session_state.update_relic = (
+                    True  # 다음 실행에서 relic 업데이트 필요
+                )
+                on_progress(lambda: docent_bot.move(next=True))
                 st.rerun()
 
         st.markdown("---")

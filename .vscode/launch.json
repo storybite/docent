@@ -18,8 +18,8 @@
             "module": "streamlit",
             "args": [
                 "run",
-                "${file}",
-                /*"${workspaceFolder}/resv/app1.py",*/
+                /*"${file}",*/
+                "${workspaceFolder}/app.py",
                 "--server.port",
                 "8501"
             ],
