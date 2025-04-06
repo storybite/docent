@@ -18,6 +18,8 @@ def get_base64_data(file_path):
 system_prompt = """
 - 당신은 e-박물관 도슨트입니다. 사용자의 질문에 친절하게 설명하세요.
 - 사용자는 채팅 창에서 왼쪽의 박물관 이미지를 감상 중입니다. 이미지 아래의 [이전]과 [다음]버튼으로 내비케이션 할 수 있습니다.
+- 새로운 이미지가 나타나면 이에 대한 설명이 당신에게 제공될 예정입니다.
+- 특정 전시물을 검색하기 위해서는 시대와 전시물의 종류를 알아야 합니다. 예는 조선시대 회화, 고려시대 불상 이 두 가지만 언급하세요.
 - 채팅 창에 글씨가 너무 많으면 읽기 어려우니 가급적 5문장 이내로 답하세요.
 - 현장에서 설명하는 것처럼 말해야 하므로 번호, 대시, 불릿 포인트 등을 사용하지 마세요.
 """
@@ -70,14 +72,26 @@ context_prompt = """
 </instructions>
 """
 
+history_facts_prompt = """
+<context>
+[시스템 운영자]<<history_facts> 바탕으로 사용자의 질문에 답할 것:
+</context>
+
+<history_facts>
+{history_facts}
+</history_facts>
+"""
+
 
 class Relics:
     def __init__(self, target_relics=None):
+        self.searched = False
         if target_relics is None:
             self.load_relics()
         else:
             self.relics = target_relics
             self.relic_ids = list(self.relics.keys())
+            self.searched = True
 
         self.index = -1
 
@@ -101,43 +115,37 @@ class Relics:
             print(msg)
             raise e
 
-    # def substitute_relics(self, traget):
-    #     self.orig_ids = self.relic_ids
-    #     self.orig_current_idx = self.index
-    #     self.relic_ids = list(relics.keys())
-    #     self.index = -1
-
-    # def restore_relics(self):
-    #     self.relic_ids = self.orig_ids
-    #     self.index = self.orig_current_idx
-
-    def get_current_relic(self):
+    @property
+    def current(self):
         self.relic_id = str(self.relic_ids[self.index])
         return self.relics[self.relic_id]
 
-    def get_header(self):
+    @property
+    def header(self):
         return f"{len(self.relics)}점 중 {self.index + 1}번째 전시물입니다."
 
-    def get_title(self):
-        return f"{self.relics[self.relic_id]['label']['명칭']} ({self.relic_id})"
+    @property
+    def title(self):
+        prefix = "검색된 작품" if self.searched else ""
+        return (
+            f"{prefix} {self.relics[self.relic_id]['label']['명칭']} ({self.relic_id})"
+        )
 
-    def set_presented(self, is_presented: bool):
-        self.relics[self.relic_id]["is_presented"] = is_presented
-
-    def previous_relic(self):
+    @property
+    def previous(self):
         if self.index == 0:
             raise ValueError("첫 번째 작품입니다.")
         else:
             self.index -= 1
-        return self.get_current_relic()
+        return self.current
 
-    def next_relic(self):
+    @property
+    def next(self):
         self.index += 1
-        return self.get_current_relic()
+        return self.current
 
-    def first_relic(self):
-        self.index = 0
-        return self.get_current_relic()
+    def set_presented(self, is_presented: bool):
+        self.relics[self.relic_id]["is_presented"] = is_presented
 
 
 class DocentBot:
@@ -158,11 +166,9 @@ class DocentBot:
 
     def add_instruction(self):
         self.revisit = True
-        # label, content, image_path = self.relics.next_relic()
-        current_relic = self.relics.get_current_relic()
-        print(current_relic["img"])
-        __context_prompt__ = context_prompt.format(
-            label=current_relic["label"], content=current_relic["content"]
+        print(self.relics.current["img"])
+        formatted_context_prompt = context_prompt.format(
+            label=self.relics.current["label"], content=self.relics.current["content"]
         )
         self.messages.append(
             {
@@ -173,13 +179,10 @@ class DocentBot:
                         "source": {
                             "type": "base64",
                             "media_type": "image/jpeg",
-                            "data": get_base64_data(current_relic["img"]),
+                            "data": get_base64_data(self.relics.current["img"]),
                         },
                     },
-                    {
-                        "type": "text",
-                        "text": __context_prompt__,
-                    },
+                    {"type": "text", "text": formatted_context_prompt},
                 ],
             }
         )
@@ -209,21 +212,21 @@ class DocentBot:
         import time
 
         # time.sleep(1)
-        return "테스트입니다."
-        # try:
-        #     # API 호출
-        #     response = client.messages.create(
-        #         max_tokens=1024,
-        #         system=system_prompt,
-        #         messages=self.messages,
-        #         model=self.model,
-        #     )
-        #     # 응답 저장
-        #     response_message = response.content[0].text
-        #     print(f"response_message: {response_message}")
-        #     return response_message
-        # except Exception as e:
-        #     return f"Error: {str(e)}"
+        # return "테스트입니다."
+        try:
+            # API 호출
+            response = client.messages.create(
+                max_tokens=1024,
+                system=system_prompt,
+                messages=self.messages,
+                model=self.model,
+            )
+            # 응답 저장
+            response_message = response.content[0].text
+            print(f"response_message: {response_message}")
+            return response_message
+        except Exception as e:
+            return f"Error: {str(e)}"
 
     def _answer(self, user_input: str) -> str:
         if not self.revisit_messsage:
@@ -234,31 +237,30 @@ class DocentBot:
         self.messages.append({"role": "assistant", "content": response_message})
         return response_message
 
-    def answer____(self, user_input: str) -> str:
-        required_tool, response_message = tools.get_required_tool(
-            user_input, "search_artifacts"
-        )
-        if required_tool is None:
-            return self._answer(user_input)
-        else:
-            return response_message
-
     def answer(self, user_input: str) -> str:
-        search_results = tools.check_search2(user_input, self.relics.relics)
-        if search_results is None:
+        script = self.get_script(user_input)
+        results: dict = tools.use_tools(script, self.relics.relics)
+        if searched_relics := results.get("search_relics"):
+            if len(searched_relics) == 0:
+                self.messages.append({"role": "user", "content": user_input})
+                response_message = "요청하신 자료의 검색 결과가 없습니다."
+                self.messages.append({"role": "assistant", "content": response_message})
+                return response_message
+            else:
+                self.messages.append({"role": "user", "content": user_input})
+                response_message = f"요청하신 전시물이 {len(searched_relics)}점 검색되었습니다. [다음] 버튼을 클릭해주세요."
+                self.stored_relics = self.relics
+                self.relics = Relics(searched_relics)
+                self.messages.append({"role": "assistant", "content": response_message})
+                return response_message
+        elif searched_history_facts := results.get("search_history_facts"):
+            _history_facts_prompt = history_facts_prompt.format(
+                history_facts=searched_history_facts
+            )
+            self.messages.append({"role": "user", "content": _history_facts_prompt})
             return self._answer(user_input)
-        elif len(search_results) == 0:
-            self.messages.append({"role": "user", "content": user_input})
-            response_message = "요청하신 자료의 검색 결과가 없습니다."
-            self.messages.append({"role": "assistant", "content": response_message})
-            return response_message
         else:
-            self.messages.append({"role": "user", "content": user_input})
-            response_message = f"요청하신 소장품이 {len(search_results)}건 검색되었습니다. [다음] 버튼을 클릭해주세요."
-            self.stored_relics = self.relics
-            self.relics = Relics(search_results)
-            self.messages.append({"role": "assistant", "content": response_message})
-            return response_message
+            return self._answer(user_input)
 
     def present_relic(self):
         self.add_instruction()
@@ -269,27 +271,28 @@ class DocentBot:
         self.relics.set_presented(True)
         return response_message
 
+    def _process_indexError(self, e: IndexError):
+        if self.stored_relics:
+            self.prefix = (
+                "검색된 작품을 모두 소개했습니다. 다음 작품을 소개하겠습니다.  \n"
+            )
+            self.relics = self.stored_relics
+            self.relics.index += 1
+        else:
+            self.prefix = "준비한 작품울 모두 소개했습니다. 처음부터 소개하겠습니다.\n"
+            self.relics.index = 1
+
     def move(self, next: bool):
         self.prefix = ""
         if next:
             try:
-                self.relics.next_relic()
-            except IndexError:
-                if self.stored_relics:
-                    self.prefix = (
-                        "검색된 작품을 모두 소개했습니다. 다음 작품을 소개하겠습니다.\n"
-                    )
-                    self.relics = self.stored_relics
-                    self.relics.index += 1
-                else:
-                    self.prefix = (
-                        "준비한 작품울 모두 소개했습니다. 처음부터 소개하겠습니다.\n"
-                    )
-                    self.relics.index = 1
+                self.relics.next
+            except IndexError as e:
+                self._process_indexError(e)
         else:
-            self.relics.previous_relic()
+            self.relics.previous
 
-        current_relic = self.relics.get_current_relic()
+        current_relic = self.relics.current
         if current_relic["is_presented"]:
             self.write_revisit_message(current_relic["title"])
         else:
@@ -311,5 +314,19 @@ class DocentBot:
             conversation.append({"role": message["role"], "text": text_message})
         return conversation
 
-    def get_current_relic(self):
-        return self.relics.get_current_relic()
+    # 대화이력을 스크립트 문자열로 변환
+    def get_script(self, user_input: str):
+        conversation = self.get_conversation()
+        script = ""
+        for message in conversation:
+            script += f"{message['role']}: {message['text']}\n"
+
+        return f"""
+<대화이력>
+{script.strip()}
+</대화이력>
+
+<사용자 메시지>
+{user_input}
+</사용자 메시지>
+"""

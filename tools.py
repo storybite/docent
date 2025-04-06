@@ -1,11 +1,14 @@
-import anthropic
+from tavily import TavilyClient
+from anthropic import Anthropic
+import os
 
-client = anthropic.Anthropic()
+client = Anthropic()
+tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
 tools = [
     {
         "name": "search_relics",
-        "description": "박물관 전시품 검색",
+        "description": "박물관 전시물 검색",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -75,6 +78,19 @@ tools = [
             ],
         },
     },
+    {
+        "name": "search_history_facts",
+        "description": "역사적 사실 검색",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "사용자 질의에 답하기 위한 인터넷 검색 키워드",
+                },
+            },
+        },
+    },
 ]
 
 
@@ -124,7 +140,18 @@ def search_relics(relics: dict, search_condition: dict):
     return results
 
 
-def check_search(query, relics_index):
+def get_tavily_response(query):
+    response = tavily.search(
+        query=query,
+        include_domains=["ko.wikipedia.org", "encykorea.aks.ac.kr"],
+        max_results=10,
+        search_depth="advanced",
+        include_answer="advanced",
+    )
+    return response["answer"], response
+
+
+def check_search_(query, relics_index):
     matched_relics = []
     required_tool = get_required_tool(query, "search_relics")
     if required_tool:
@@ -146,11 +173,15 @@ def tool_call(query):
     return response
 
 
-def check_search2(query, relics_index):
+def use_tools(query, relics_index):
     response = tool_call(query)
+    results = {}
     for block in response.content:
-        if block.type == "tool_use" and block.name == "search_relics":
-            search_condition = map_to_korean(block.input)
-            matched_relics = search_relics(relics_index, search_condition)
-            return matched_relics
-    return None
+        if block.type == "tool_use":
+            if block.name == "search_relics":
+                search_condition = map_to_korean(block.input)
+                matched_relics = search_relics(relics_index, search_condition)
+                results[block.name] = matched_relics
+            elif block.name == "search_history_facts":
+                results[block.name], _ = get_tavily_response(block.input["query"])
+    return results

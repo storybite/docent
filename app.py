@@ -106,6 +106,13 @@ if "error_message" in st.session_state and st.session_state.error_message:
     st.toast(st.session_state.error_message, icon="🚨")
     st.session_state.error_message = None
 
+# 세션 상태에 대화 내역 초기화
+if "docent_bot" not in st.session_state:
+    docent_bot = DocentBot()
+    st.session_state.docent_bot = docent_bot
+else:
+    docent_bot = st.session_state.docent_bot
+
 
 def on_progress(func):
 
@@ -123,13 +130,6 @@ def on_progress(func):
     overlay_placeholder.empty()
     return result
 
-
-# 세션 상태에 대화 내역 초기화
-if "docent_bot" not in st.session_state:
-    docent_bot = DocentBot()
-    st.session_state.docent_bot = docent_bot
-else:
-    docent_bot = st.session_state.docent_bot
 
 if docent_bot.visitor_status == "NotEntered":
     # 사이드바 설정
@@ -178,16 +178,15 @@ if docent_bot.visitor_status == "NotEntered":
 else:
     # 이미지 컨테이너 생성
     with st.sidebar:
-
         # 현재 relic 정보를 session_state에 저장/관리
         if "current_relic" not in st.session_state:
-            st.session_state.current_relic = docent_bot.get_current_relic()
-            st.session_state.header = docent_bot.relics.get_header()
+            st.session_state.current_relic = docent_bot.relics.current
+            st.session_state.header = docent_bot.relics.header
 
         # 버튼 클릭 시에만 relic 정보 업데이트
         if "update_relic" in st.session_state and st.session_state.update_relic:
-            st.session_state.current_relic = docent_bot.get_current_relic()
-            st.session_state.header = docent_bot.relics.get_header()
+            st.session_state.current_relic = docent_bot.relics.current
+            st.session_state.header = docent_bot.relics.header
             st.session_state.update_relic = False
 
         title, img_path, header = (
