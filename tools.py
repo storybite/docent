@@ -80,7 +80,7 @@ tools = [
     },
     {
         "name": "search_history_facts",
-        "description": "역사적 사실 검색",
+        "description": "역사적 사실에 대한 사용자의 질문에 답히기 위해 사용",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -90,6 +90,7 @@ tools = [
                 },
             },
         },
+        # "cache_control": {"type": "ephemeral"},
     },
 ]
 
@@ -134,7 +135,22 @@ def search_relics(relics: dict, search_condition: dict):
     condition_keys = valid_conditions.keys()
     for artifact_id, artifact_data in relics.items():
         search_data = artifact_data["search"]
-        if all(search_data.get(key) == valid_conditions[key] for key in condition_keys):
+        # 모든 조건을 확인하되, 불리언 필드(건축~불교)는 하나라도 True면 통과
+        match = True
+        for key in condition_keys:
+            # 문자열 필드 (국적, 시대, 지정문화유산)는 정확히 일치해야 함
+            if key in ["국적", "시대", "지정문화유산"]:
+                if search_data.get(key) != valid_conditions[key]:
+                    match = False
+                    break
+            # 불리언 필드 (건축, 조각, 공예, 회화, 서예, 장신구, 복식, 과학기술, 불교)
+            else:
+                # 검색 조건은 True인 필드인데 데이터에 필드가 False면 불일치
+                if valid_conditions[key] is True and search_data.get(key) is False:
+                    match = False
+                    break
+
+        if match:
             results[artifact_id] = artifact_data
 
     return results
@@ -164,12 +180,14 @@ def check_search_(query, relics_index):
 
 def tool_call(query):
     response = client.messages.create(
-        model="claude-3-7-sonnet-20250219",
+        # model="claude-3-7-sonnet-20250219",
+        model="claude-3-5-sonnet-20240620",
         max_tokens=1024,
         temperature=0,
         tools=tools,
         messages=[{"role": "user", "content": query}],
     )
+    print("tool_call cache:", response.usage.model_dump_json())
     return response
 
 

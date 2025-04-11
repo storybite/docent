@@ -12,14 +12,14 @@
             "justMyCode": false,
         },
         {
-            "name": "Streamlit: Run Current File",
+            "name": "app.py",
             "type": "debugpy",
             "request": "launch",
             "module": "streamlit",
             "args": [
                 "run",
                 /*"${file}",*/
-                "${workspaceFolder}/app.py",
+                "${workspaceFolder}/mock_app.py",
                 "--server.port",
                 "8501"
             ],
