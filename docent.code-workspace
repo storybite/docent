@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../memo"
+		}
+	],
+	"settings": {
+		"git.ignoreLimitWarning": true
+	}
+}
