@@ -1,0 +1,8 @@
+__pycache__/
+#*.ipynb
+/test
+venv_dcnt
+/scrap2/database
+/scrap2/database_bk
+/scrap3/relics
+.streamlit/secrets.toml
