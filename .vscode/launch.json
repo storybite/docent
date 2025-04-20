@@ -19,7 +19,7 @@
             "args": [
                 "run",
                 /*"${file}",*/
-                "${workspaceFolder}/mock_app.py",
+                "${workspaceFolder}/app.py",
                 "--server.port",
                 "8501"
             ],
