@@ -24,6 +24,20 @@
                 "8501"
             ],
             "justMyCode": false
+        },
+        {
+            "name": "src/app.py",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": [
+                "run",
+                /*"${file}",*/
+                "${workspaceFolder}/src/app.py",
+                "--server.port",
+                "8501"
+            ],
+            "justMyCode": false
         }
     ]
 }
