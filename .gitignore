@@ -5,5 +5,10 @@ venv_dcnt
 /scrap2/database
 /scrap2/database_bk
 /scrap3/relics
+/mcp/file_system*
+/mcp/mcp_client.py
+/mcp/mcp_server.py
+/mcp/slack_test.py
+/mcp/mcp_test*
+/mcp/slack_test*
 .streamlit/secrets.toml
-/mcp
