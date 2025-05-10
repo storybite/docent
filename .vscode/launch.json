@@ -38,6 +38,19 @@
                 "8501"
             ],
             "justMyCode": false
+        },
+        {
+            "name": "curr streamlist",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": [
+                "run",
+                "${file}",
+                "--server.port",
+                "8501"
+            ],
+            "justMyCode": false
         }
     ]
 }
