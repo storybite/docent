@@ -5,7 +5,7 @@ venv_dcnt
 /scrap2/database
 /scrap2/database_bk
 /scrap3/relics
-/mcp
+mcp
 /mcp/file_system*
 /mcp/mcp_client.py
 /mcp/mcp_server.py
