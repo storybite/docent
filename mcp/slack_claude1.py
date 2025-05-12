@@ -3,16 +3,20 @@ from mcp.client.streamable_http import streamablehttp_client
 import json
 import base64
 from anthropic import Anthropic
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 client = Anthropic()
 
 config = {
-    "",
+    "token": os.getenv("slack_bot_token"),
 }
 # Encode config in base64
 config_json = json.dumps(config, separators=(",", ":")).encode()
 config_b64 = base64.urlsafe_b64encode(config_json).decode()  # str
-smithery_api_key = ""
+smithery_api_key = os.getenv("smithery_api_key")
 
 # Create server URL
 url = f"https://server.smithery.ai/@smithery-ai/slack/mcp?config={config_b64}&api_key={smithery_api_key}"
@@ -43,14 +47,16 @@ async def make_reservation(
 
     response = request_model(tools, system, messages)
 
-    while True:
+    tool_name, tries = "", 0
+    while tool_name != "report_reservation":
+        # while True:
         tool_content = next(
             content for content in response.content if content.type == "tool_use"
         )
         tool_name, tool_args = tool_content.name, tool_content.input
 
-        if tool_name == "report_reservation":
-            return tool_args
+        # if tool_name == "report_reservation":
+        #     return tool_args
 
         tool_result = await session.call_tool(tool_name, tool_args)
         print(tool_result)
@@ -70,6 +76,11 @@ async def make_reservation(
             ]
         )
         response = request_model(tools, system_prompt, messages)
+        if tries > 10:
+            raise ValueError("Too many tries")
+        tries += 1
+
+    return tool_args
 
 
 def filter_input_schema(input_schema):

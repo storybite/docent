@@ -1,5 +1,6 @@
 __pycache__/
 #*.ipynb
+.env
 /test
 venv_dcnt
 /scrap2/database

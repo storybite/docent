@@ -134,7 +134,7 @@ def init_page():
     )
 
     # 3개의 컬럼으로 나눈 후 가운데에만 버튼을 배치하여 중앙 정렬
-    _, col_center, _ = st.columns([1, 2, 1])
+    col_left, col_center, col_right = st.columns([1, 2, 1])
     with col_center:
         if st.button("입장하기", use_container_width=True, type="primary"):
             print("입장하기 버튼이 클릭되었습니다.")
@@ -201,81 +201,88 @@ def main_page():
             st.markdown("---")
             st.markdown(how_to_use)
 
-            st.subheader("도슨트 프로그램 신청")
-            with st.form("docent_program_form"):
+            # if st.button("도슨트 프로그램 신청", use_container_width=True):
+            #     st.session_state.show_form = True
+
+            # if st.session_state.get("show_form", False):
+            if not st.session_state.get("form_submitted", False):
+
+                st.subheader("도슨트 프로그램 신청")
                 program = st.selectbox(
-                    label="프로그램을 선택하세요.",
-                    options=[
+                    "문화해설 프로그램",
+                    [
                         "대표 유물 해설",
                         "전시관별 해설",
-                        "외국인을 위한 해설(영어)",
-                        "외국인을 위한 해설(중국어)",
-                        "외국인을 위한 해설(일본어)",
+                        "외국인을 위한 해설",
                     ],
                     disabled=st.session_state.get("form_submitted", False),
+                    key="program_select",
                 )
+                if program == "외국인을 위한 해설":
+                    language = st.selectbox(
+                        "언어를 선택하세요",
+                        ["영어", "중국어", "일본어"],
+                        disabled=st.session_state.get("form_submitted", False),
+                        key="language_select",
+                    )
+                else:
+                    language = "한국어"
 
-                tomorrow = datetime.date.today() + datetime.timedelta(days=1)
-                weekday_map = ["월", "화", "수", "목", "금"]
-                weekdays = []
-                d = tomorrow
-                while len(weekdays) < 10:
-                    if d.weekday() < 5:  # 0~4: 월~금
-                        weekdays.append(
-                            f"{d.strftime('%Y-%m-%d')} ({weekday_map[d.weekday()]})"
+                with st.form("docent_program_form"):
+                    # 이번 주 평일 리스트 생성
+                    tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+                    weekday_map = ["월", "화", "수", "목", "금"]
+                    weekdays = []
+                    d = tomorrow
+                    while len(weekdays) < 10:
+                        if d.weekday() < 5:  # 0~4: 월~금
+                            weekdays.append(
+                                f"{d.strftime('%Y-%m-%d')} ({weekday_map[d.weekday()]})"
+                            )
+                        d += datetime.timedelta(days=1)
+
+                    visit_date = st.selectbox(
+                        "방문 일자를 선택하세요",
+                        options=weekdays,
+                        disabled=st.session_state.get("form_submitted", False),
+                        key="visit_date_select",
+                    )
+
+                    visit_hours = st.selectbox(
+                        "방문 시간을 선택하세요",
+                        options=["11:00", "13:00", "15:00"],
+                        disabled=st.session_state.get("form_submitted", False),
+                        key="visit_hours_select",
+                    )
+
+                    # 방문 인원수 입력
+                    visitors = st.number_input(
+                        "방문 인원수를 입력하세요",
+                        min_value=1,
+                        value=1,
+                        disabled=st.session_state.get("form_submitted", False),
+                        key="visitors_input",
+                    )
+
+                    # 제출/취소 버튼
+                    if not st.session_state.get("form_submitted", False):
+                        submitted = st.form_submit_button("신청하기")
+                        if submitted:
+                            st.session_state.form_submitted = True
+                            st.session_state.program_data = {
+                                "program": program,
+                                "visit_date": visit_date,
+                                "visit_hours": visit_hours,
+                                "visitors": visitors,
+                                "language": language,
+                            }
+                            st.toast("신청이 완료되었습니다!")
+                            st.rerun()
+                    else:
+                        st.write("도슨트가 배정되면 email로 알려드립니다.")
+                        st.write(
+                            "부득이한 사정으로 취소할 경우 방문일 전일까지 email로 통지 부탁드립니다."
                         )
-                    d += datetime.timedelta(days=1)
-
-                visit_date = st.selectbox(
-                    label="방문 일자를 선택하세요",
-                    options=weekdays,
-                    disabled=st.session_state.get("form_submitted", False),
-                )
-
-                visit_hours = st.selectbox(
-                    label="방문 시간을 선택하세요",
-                    options=["11:00", "13:00", "15:00"],
-                    disabled=st.session_state.get("form_submitted", False),
-                )
-
-                visitors = st.number_input(
-                    label="방문 인원수를 입력하세요",
-                    min_value=1,
-                    value=1,
-                    disabled=st.session_state.get("form_submitted", False),
-                )
-
-                applicant_email = st.text_input(
-                    label="신청자 이메일을 입력하세요",
-                    disabled=st.session_state.get("form_submitted", False),
-                )
-
-                submitted = st.form_submit_button(
-                    label="신청하기",
-                    disabled=st.session_state.get("form_submitted", False),
-                )
-                if submitted:
-                    # 이메일 유효성 검사
-                    import re
-
-                    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-                    if not re.match(email_pattern, applicant_email):
-                        st.error("유효한 이메일 주소를 입력해주세요.")
-                        return
-                    st.session_state.form_submitted = True
-                    st.session_state.program_data = {
-                        "program": program,
-                        "visit_date": visit_date,
-                        "visit_hours": visit_hours,
-                        "visitors": visitors,
-                        "applicant_email": applicant_email,
-                    }
-                    st.success("신청이 완료되었습니다!")
-                    st.rerun()
-
-                st.markdown(
-                    "🔔도슨트가 배정되면 이메일로 알려드립니다.  \n🚨부득이한 사정으로 취소해야 할 경우 방문일 전일까지 배정된 도슨트님의 이메일로 통지 부탁드립니다."
-                )
 
     def chat_area():
         for message in docent_bot.get_conversation():
