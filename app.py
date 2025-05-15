@@ -1,7 +1,12 @@
 import streamlit as st
 import base64
 from docent import DocentBot
-import datetime
+import re, datetime, time
+from reservation_agent import ReservationAgent
+import asyncio
+import streamlit as st
+from concurrent.futures import ThreadPoolExecutor
+import mcp_main as mcp
 
 # Streamlit 페이지 설정
 st.set_page_config(page_title="도슨트 봇", page_icon="🎭", layout="centered")
@@ -109,6 +114,43 @@ def on_progress(func):
     return result
 
 
+if "loop" not in st.session_state:  # <─ 추가
+    st.session_state.loop = asyncio.new_event_loop()
+
+_pool = ThreadPoolExecutor(max_workers=4)
+
+
+def run_async(coro):
+    # ⛔ 기존: loop = asyncio.new_event_loop()
+    # ✅ 변경: 세션에 이미 만들어 둔 loop 재사용
+    return _pool.submit(st.session_state.loop.run_until_complete, coro)
+
+
+def _check_background_jobs():
+    """ThreadPoolExecutor에서 돌아가는 작업(Future)의 결과·예외를 표시하고 정리한다."""
+    fut = st.session_state.get("future_resv")
+    if not fut:  # 처리 중인 예약이 없으면 바로 종료
+        return
+
+    if not fut.done():  # 아직 끝나지 않았으면 잠깐만 스피너로 표시
+        with st.spinner("예약 처리 중…"):
+            time.sleep(0.1)  # 0.1초 정도면 렌더링 부하 거의 없음
+        return
+
+    # 여기까지 왔으면 작업이 끝난 상태이므로 결과·예외를 꺼낸다
+    exc = fut.exception()
+    if exc:
+        st.error(f"예약 처리 중 오류: {exc}")
+    else:
+        st.success("예약이 성공적으로 처리됐습니다!")
+
+    # 한 번 표시했으면 세션 상태에서 제거해서 다음 렌더링 땐 안 보이게
+    del st.session_state["future_resv"]
+
+
+_check_background_jobs()
+
+
 def init_page():
 
     # 사이드바 설정
@@ -143,6 +185,12 @@ def init_page():
             st.session_state.docent_bot = docent_bot
             on_progress(lambda: docent_bot.move(is_next=True))
             st.session_state.relic_card = docent_bot.relics.current_to_card()
+
+            resv_agent = ReservationAgent()
+            # ② SSE 서버 연결을 “불-앤-포겟”으로 시작
+            st.session_state.future_conn = run_async(resv_agent.connect_sse_server())
+            st.session_state.resv_agent = resv_agent
+            # st.session_state.future_conn = run_async(mcp.main())
             st.rerun()
 
 
@@ -201,8 +249,9 @@ def main_page():
             st.markdown("---")
             st.markdown(how_to_use)
 
-            st.subheader("도슨트 프로그램 신청")
             with st.form("docent_program_form"):
+                st.subheader("도슨트 프로그램 신청")
+
                 program = st.selectbox(
                     label="프로그램을 선택하세요.",
                     options=[
@@ -247,6 +296,7 @@ def main_page():
 
                 applicant_email = st.text_input(
                     label="신청자 이메일을 입력하세요",
+                    value="heyjin337@gmail.com",
                     disabled=st.session_state.get("form_submitted", False),
                 )
 
@@ -255,27 +305,46 @@ def main_page():
                     disabled=st.session_state.get("form_submitted", False),
                 )
                 if submitted:
-                    # 이메일 유효성 검사
-                    import re
-
                     email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
                     if not re.match(email_pattern, applicant_email):
                         st.error("유효한 이메일 주소를 입력해주세요.")
                         return
+
                     st.session_state.form_submitted = True
-                    st.session_state.program_data = {
+                    application = {
                         "program": program,
                         "visit_date": visit_date,
                         "visit_hours": visit_hours,
                         "visitors": visitors,
                         "applicant_email": applicant_email,
                     }
+                    future_conn = st.session_state.get("future_conn")
+                    # ① 아직 연결 중이라면: 메시지만 띄우고 함수 종료``
+                    if future_conn and not future_conn.done():
+                        st.error(
+                            "SSE 서버에 연결 중입니다. 연결이 완료되면 다시 '신청하기'를 눌러 주세요."
+                        )
+                        return
+                    if future_conn and future_conn.done() and future_conn.exception():
+                        st.error(f"SSE 서버 연결 실패: {future_conn.exception()}")
+                        return
+                    st.session_state.future_resv = run_async(
+                        st.session_state.resv_agent.make_reservation(application)
+                    )
+                    # try:
+                    #     st.session_state.future_resv = run_async(
+                    #         st.session_state.resv_agent.make_reservation(application)
+                    #     )
+                    # except Exception as e:
+                    #     st.error("예약 처리 중 예외 발생: " + str(e))
+
                     st.success("신청이 완료되었습니다!")
                     st.rerun()
+                else:
 
-                st.markdown(
-                    "🔔도슨트가 배정되면 이메일로 알려드립니다.  \n🚨부득이한 사정으로 취소해야 할 경우 방문일 전일까지 배정된 도슨트님의 이메일로 통지 부탁드립니다."
-                )
+                    st.markdown(
+                        "🔔도슨트가 배정되면 이메일로 알려드립니다.  \n🚨부득이한 사정으로 취소해야 할 경우 방문일 전일까지 배정된 도슨트님의 이메일로 통지 부탁드립니다."
+                    )
 
     def chat_area():
         for message in docent_bot.get_conversation():
@@ -298,3 +367,37 @@ if "entered" not in st.session_state:
     init_page()
 else:
     main_page()
+
+
+# import streamlit as st, asyncio, time
+# from mcp_client import MCPClient
+# from concurrent.futures import ThreadPoolExecutor
+
+# _pool = ThreadPoolExecutor(max_workers=2)
+
+# def run_async(coro):
+#     loop = asyncio.new_event_loop()
+#     return _pool.submit(loop.run_until_complete, coro)
+
+# mcp = MCPClient()
+
+# # Connect 버튼…
+# # future_conn = run_async(mcp.connect_to_server(path))
+
+# q = st.text_input("질문")
+# if st.button("질문 보내기") and q:
+#     placeholder = st.empty()
+#     future = run_async(mcp.process_query(q))
+
+#     while not future.done():
+#         placeholder.spinner("도슨트가 답변 중 …")
+#         time.sleep(0.3)
+
+#     msgs = future.result()
+#     placeholder.empty()
+#     for m in msgs:
+#         st.chat_message(m["role"]).markdown(m["content"][0] if isinstance(m["content"], list) else m["content"])
+
+# ───────── 사이드바의 공통 영역 (초반 부분에 두면 됨) ─────────
+# if msg := st.session_state.pop("toast_msg", None):
+#     st.success(msg)

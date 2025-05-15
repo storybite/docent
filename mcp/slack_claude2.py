@@ -128,68 +128,72 @@ system_prompt = """
 5. 최종 응답은 'report_reservation' 도구를 사용합니다.
 """.strip()
 
+from contextlib import AsyncExitStack
+
+exit_stack = AsyncExitStack()
+
 
 async def main():
-    async with streamablehttp_client(url) as streams:
-        async with ClientSession(*streams) as session:
-            # ──────────── 몽키 패치 구간 ──────────
-            if callable(getattr(session, "_session_read_timeout_seconds", None)):
-                # 필요하면 원하는 시간으로 수정 (예: 10초)
-                session._session_read_timeout_seconds = timedelta(seconds=10)
-            # ───────────────────────────────────────
+    streams = await exit_stack.enter_async_context(streamablehttp_client(url))
+    session = await exit_stack.enter_async_context(ClientSession(*streams))
+    # ──────────── 몽키 패치 구간 ──────────
+    if callable(getattr(session, "_session_read_timeout_seconds", None)):
+        # 필요하면 원하는 시간으로 수정 (예: 10초)
+        session._session_read_timeout_seconds = timedelta(seconds=10)
+    # ───────────────────────────────────────
+    await session.initialize()
+    session_tools = await session.list_tools()
+    print("Tools:", ", ".join(t.name for t in session_tools.tools))
+    print("=" * 100)
+    tools = [
+        {
+            "name": tool.name,
+            "description": tool.description,
+            "input_schema": filter_input_schema(tool.inputSchema),
+        }
+        for tool in (await session.list_tools()).tools
+    ] + [report_reservation]
 
-            await session.initialize()
-            session_tools = await session.list_tools()
-            print("Tools:", ", ".join(t.name for t in session_tools.tools))
-            print("=" * 100)
-            tools = [
+    input_messages = []
+
+    # chat 함수를 polling 방식으로 외부에서 호출
+    polling_complete = False
+    while not polling_complete:
+        if not input_messages:
+            input_messages = [
                 {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "input_schema": filter_input_schema(tool.inputSchema),
-                }
-                for tool in (await session.list_tools()).tools
-            ] + [report_reservation]
+                    "role": "user",
+                    "content": "2025년 5월 29일 오전 10시에 한국인 5명이 문화해설을 요청하셨습니다. 가능한 도슨트님께서는 메시지에 댓글 부탁 드립니다.",
+                },
+            ]
 
+        response = await make_reservation(
+            tools=tools,
+            system=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                },
+            ],
+            messages=input_messages,
+            session=session,
+        )
+        # print(response)
+
+        # 완료 여부 확인 (여기서 적절한 완료 조건을 설정)
+        if response["is_success"]:
+            polling_complete = True
             input_messages = []
-
-            # chat 함수를 polling 방식으로 외부에서 호출
-            polling_complete = False
-            while not polling_complete:
-                if not input_messages:
-                    input_messages = [
-                        {
-                            "role": "user",
-                            "content": "2025년 5월 29일 오전 10시에 한국인 5명이 문화해설을 요청하셨습니다. 가능한 도슨트님께서는 메시지에 댓글 부탁 드립니다.",
-                        },
-                    ]
-                response = await make_reservation(
-                    tools=tools,
-                    system=[
-                        {
-                            "type": "text",
-                            "text": system_prompt,
-                            "cache_control": {"type": "ephemeral"},
-                        },
-                    ],
-                    messages=input_messages,
-                    session=session,
-                )
-                # print(response)
-
-                # 완료 여부 확인 (여기서 적절한 완료 조건을 설정)
-                if response["is_success"]:
-                    polling_complete = True
-                    input_messages = []
-                else:
-                    # # 잠시 대기 후 다시 시도
-                    input_messages.append(
-                        {
-                            "role": "user",
-                            "content": "완료 처리되지 않은 예약 건이 있는지 확인하세요.",
-                        },
-                    )
-                    await asyncio.sleep(2)
+        else:
+            # # 잠시 대기 후 다시 시도
+            input_messages.append(
+                {
+                    "role": "user",
+                    "content": "완료 처리되지 않은 예약 건이 있는지 확인하세요.",
+                },
+            )
+            await asyncio.sleep(2)
 
 
 if __name__ == "__main__":
