@@ -78,12 +78,15 @@ class LLM:
         messages: list,
         temperature: float = 0,
         max_tokens: int = 2048,
+        tools: dict | None = None,
         tool_choice: dict = {"type": "auto"},
         tool_system_prompt: str | None = None,
         stop_sequences: list[str] = [],
     ):
-        from tools import tools
+        if not tools:
+            from tools import tools as imported_tools
 
+            tools = imported_tools
         try:
             response = self.client.messages.create(
                 max_tokens=max_tokens,
