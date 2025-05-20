@@ -8,6 +8,7 @@ import dill
 from llm import claude_3_7 as claude
 from prompt_templates import search_result_filter
 import json
+import re
 
 upstage = OpenAI(
     api_key=os.getenv("UPSTAGE_API_KEY"), base_url="https://api.upstage.ai/v1"
@@ -18,17 +19,17 @@ upstage = OpenAI(
 class DocEmbeddings:
     id: str
     doc: str
-    embeddings: Optional[list[float]] = field(default=None)
+    embeddings: list[float] | None = None
 
 
 @dataclass(slots=True)
 class Similarity:
     id: str
     doc: str
-    docs: str
     score: float
     rank: int = None
     rrf_score: float = None
+    docs: str
 
 
 class Collecton:
@@ -45,7 +46,7 @@ class Collecton:
         if getattr(self, "_initialized", False):
             return
 
-        self.file_path = str(Path("scrap2") / "database" / f"{file_name}.pkl")
+        self.file_path = str(Path("scrap2") / "database" / f"{file_name}.dill")
         self.index: dict[str, DocEmbeddings] = {}
         self._initialized = True
 
@@ -67,12 +68,12 @@ class Collecton:
         with open(self.file_path, "wb") as f:
             dill.dump(self.index, f)
 
-    def query(self, query: str, cutoff=0.4, top_k: int = 60) -> list[Similarity]:
+    def query(self, query: str, cutoff=0.4, top_k: int = 60) -> dict[int, Similarity]:
         query_embeddings = self._get_embeddings(query)
         similarity_dict: dict[str, Similarity] = {}
         for doc_embedding in self.index.values():
-            if doc_embedding.embeddings is None:
-                continue
+            # if doc_embedding.embeddings is None:
+            #     continue
             score = np.dot(query_embeddings, doc_embedding.embeddings) / (
                 np.linalg.norm(query_embeddings)
                 * np.linalg.norm(doc_embedding.embeddings)
@@ -93,7 +94,7 @@ class Collecton:
         return ranked_dict
 
     def _make_rank(self, top_ids: list[str], similarity_dict: dict[str, Similarity]):
-        ranked_dict: dict[str, Similarity] = {}
+        ranked_dict: dict[int, Similarity] = {}
         for rank, top_id in enumerate(top_ids, start=1):
             similarity_dict[top_id].rank = rank
             ranked_dict[top_id] = similarity_dict[top_id]
@@ -241,6 +242,24 @@ def get_rrf_bkup(
         results.append(r1)
 
     return sorted(results, key=lambda s: s.rrf_score, reverse=True)
+
+
+HANJA_RE = re.compile(
+    r"["
+    r"\u4E00-\u9FFF"  # 기본
+    r"\u3400-\u4DBF"  # 확장 A
+    r"\uF900-\uFAFF"  # 호환 한자
+    r"\U00020000-\U0002A6DF"  # 확장 B
+    r"\U0002A700-\U0002B73F"  # 확장 C–D
+    r"\U0002B740-\U0002B81F"  # 확장 E
+    r"]+"
+)
+
+
+def clean_text(text: str, replace_with: str = "") -> str:
+    text = re.sub(r"\([^)]*\)|,", "", text)
+    text = HANJA_RE.sub(replace_with, text)
+    return text
 
 
 title_collection = Collecton("title").load()
