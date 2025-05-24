@@ -4,7 +4,7 @@ import os
 from prompt_templates import history_based_prompt
 from typing import Literal
 from pydantic import BaseModel, Field
-from llm import claude_3_5 as claude
+from llm import claude_3_7 as claude
 from vector_search import (
     title_collection,
     content_collection,
@@ -40,7 +40,7 @@ class Category(BaseModel):
 tools = [
     {
         "name": "search_relics_by_period_and_genre",
-        "description": "[시대 and (전시물 장르 or 전시물 유형]으로 검색",
+        "description": "'시대'와 '전시물'로 검색 요청하는 경우에 한해 사용할 것",
         "input_schema": Category.model_json_schema(),
     },
     {
@@ -90,11 +90,12 @@ def search_relics_by_period_and_genre(search_condition: dict, database: dict):
 def search_relics_without_period_and_genre(
     query: str, database: dict, user_message: str
 ):
-    title_similarities: dict[str, Similarity] = title_collection.query(query, top_k=3)
-    title_similarities = list(title_similarities.values())
+    title_similarities = title_collection.query(query, top_k=5)
     description_similarities = description_collection.query(query, top_k=30)
     content_similarities = content_collection.query(query, top_k=30)
-    desc_cntn_similarities = get_rrf(description_similarities, content_similarities)[:3]
+    desc_cntn_similarities = get_rrf(
+        [description_similarities, content_similarities], weights=[0.6, 0.4]
+    )[:3]
     similarities = title_similarities + desc_cntn_similarities
     filtered_similarities = filter_results(similarities, user_message)
     results = {}

@@ -49,15 +49,16 @@ guide_program_prompt = """
 """.strip()
 
 tool_system_prompt = """
-- 사용자 메시지 그 자체에 [시대 and (전시물 장르 or 전시물 유형]이 나타나 있으면 search_relics_by_period_and_genre를 사용할 것.
+- 사용자 메시지 그 자체에 '시대'와 '장르'가 나타나 있으면 search_relics_by_period_and_genre를 사용할 것.
     ex) '조선시대 서예 찾아줘', '신라시대 불상 보고 싶어'
     <RESTRICTIONS>
-        사용자 메시지로부터 다음 [예시]와 같은 추론 과정을 통해 '시대'나 '장르'를 유추하지 말 것.
-        [예시]:
-        사용자 메시지: 경주 부부총 귀걸이 찾아줘. 
-        추론 과정: 공예품은 신라시대 작품이야. 따라서 period='신라시대', genre='공예품'이므로 search_relics_by_period_and_genre를 사용해야 해.
-    <RESTRICTIONS/>
-- 사용자 메시지 그 자체에 [시대 and (전시물 장르 or 전시물 유형]이 나타나 있지 않지만 검색 요청인 경우 search_relics_without_period_and_genre를 사용할 것
+        사용자 메시지에 '시대'나 '장르'가 없음에도 <BAD PRACTICE/>와 같은 추론 과정을 통해 '시대'나 '장르'를 유추하지 말 것.
+        <BAD PRACTICE>
+            사용자 메시지: 경주 부부총 귀걸이 찾아줘. 
+            추론 과정: 공예품은 신라시대 작품이야. 따라서 period='신라시대', genre='공예품'이므로 search_relics_by_period_and_genre를 사용해야 해.
+        </BAD PRACTICE>
+    </RESTRICTIONS>
+- 사용자 메시지 그 자체에 '시대'와 '장르'가 나타나 있지 않지만, 검색 요청이라면 search_relics_without_period_and_genre를 사용할 것
 """.strip()
 
 search_result_filter = """

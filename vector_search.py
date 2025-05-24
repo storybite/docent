@@ -26,10 +26,11 @@ class DocEmbeddings:
 class Similarity:
     id: str
     doc: str
-    score: float
-    rank: int = None
-    rrf_score: float = None
-    docs: str
+    score: float = 0
+    rank: int = None  # 삭제
+    rrf_score: float = 0  # 삭제
+    docs: str = ""  # 삭제
+    collection_name: str = ""  # 추가
 
 
 class Collecton:
@@ -70,35 +71,24 @@ class Collecton:
 
     def query(self, query: str, cutoff=0.4, top_k: int = 60) -> dict[int, Similarity]:
         query_embeddings = self._get_embeddings(query)
-        similarity_dict: dict[str, Similarity] = {}
+        similarities: list[Similarity] = []
         for doc_embedding in self.index.values():
-            # if doc_embedding.embeddings is None:
-            #     continue
             score = np.dot(query_embeddings, doc_embedding.embeddings) / (
                 np.linalg.norm(query_embeddings)
                 * np.linalg.norm(doc_embedding.embeddings)
             )
             if score < cutoff:
                 continue
-            similarity_dict[doc_embedding.id] = Similarity(
-                id=doc_embedding.id,
-                doc=doc_embedding.doc,
-                docs=doc_embedding.doc,
-                score=float(score),
+            similarities.append(
+                Similarity(
+                    id=doc_embedding.id,
+                    doc=doc_embedding.doc,
+                    score=float(score),
+                )
             )
 
-        top_ids = sorted(
-            similarity_dict.keys(), key=lambda x: similarity_dict[x].score, reverse=True
-        )[:top_k]
-        ranked_dict = self._make_rank(top_ids, similarity_dict)
-        return ranked_dict
-
-    def _make_rank(self, top_ids: list[str], similarity_dict: dict[str, Similarity]):
-        ranked_dict: dict[int, Similarity] = {}
-        for rank, top_id in enumerate(top_ids, start=1):
-            similarity_dict[top_id].rank = rank
-            ranked_dict[top_id] = similarity_dict[top_id]
-        return ranked_dict
+        similarities = sorted(similarities, key=lambda x: x.score, reverse=True)[:top_k]
+        return similarities
 
     def _get_embeddings(self, text: str) -> list[float]:
         return (
@@ -160,8 +150,64 @@ class Collecton:
 
 #     return sorted(results, key=lambda o: o.rrf_score, reverse=True)
 
+from collections import defaultdict
+from typing import Dict, List, Optional
 
-def get_rrf(
+# 이미 선언되어 있다고 가정
+# @dataclass(slots=True)
+# class Similarity:
+#     id: str
+#     doc: str
+#     score: float
+#     rank: int = None
+#     rrf_score: float = None
+#     docs: str = ""          # 여러 시스템 문서 병합용(필요 시)
+
+
+def get_rrf_2(
+    sim_dicts: list[Dict[str, Similarity]],
+    k: int = 60,
+    weights: list[float] | None = None,
+) -> List["Similarity"]:
+
+    n_systems = len(sim_dicts)
+    if n_systems == 0:
+        return []
+
+    # 모든 id 집합
+    union_ids = set().union(*(d.keys() for d in sim_dicts))
+
+    results: List["Similarity"] = []
+
+    for _id in union_ids:
+        rrf_score = 0.0
+        merged_docs: List[str] = []
+        representative_obj: Optional["Similarity"] = None
+
+        # 각 시스템별 정보 누적
+        for weight, sim in zip(weights, sim_dicts):
+            obj = sim.get(_id)
+            if obj is None:
+                continue
+
+            if obj.rank is not None:
+                rrf_score += weight / (k + obj.rank)
+
+            merged_docs.append(obj.doc)
+            if representative_obj is None:
+                representative_obj = obj  # 첫 등장 객체를 대표로
+
+        # 대표 객체는 최소 한 번 존재
+        rep = representative_obj
+        rep.docs = "\n".join(merged_docs).strip()
+        rep.rrf_score = rrf_score
+        results.append(rep)
+
+    # RRF 점수로 내림차순 정렬
+    return sorted(results, key=lambda o: o.rrf_score, reverse=True)
+
+
+def get_rrf_3(
     sim1: dict[str, Similarity],
     sim2: dict[str, Similarity],
     k: int = 60,
@@ -189,8 +235,45 @@ def get_rrf(
     return sorted(results, key=lambda o: o.rrf_score, reverse=True)
 
 
+def get_rrf(
+    ranked_lists: list[list[Similarity]],
+    k: int = 60,
+    weights: list[float] | None = None,
+) -> list[Similarity]:
+
+    weights = weights or [1 / len(ranked_lists)] * len(ranked_lists)
+    # rrf_scores = defaultdict(float)
+    rrf_sim_dict: dict[str, Similarity] = {}
+
+    for w, ranked in zip(weights, ranked_lists):
+        for rank, sim in enumerate(ranked, start=1):
+            score = w / (k + rank)
+            if sim.id in rrf_sim_dict:
+                rrf_sim_dict[sim.id].score += score
+                rrf_sim_dict[sim.id].doc += "\n" + sim.doc
+            else:
+                rrf_sim = Similarity(
+                    id=sim.id,
+                    doc=sim.doc,
+                    score=score,
+                )
+                rrf_sim_dict[sim.id] = rrf_sim
+
+    return sorted(rrf_sim_dict.values(), key=lambda x: x.score, reverse=True)
+
+
 def filter_results(similarities: list[Similarity], query: str):
-    search_doc_results = {sim.id: sim.docs for sim in similarities}
+
+    sim_dict: dict[str, Similarity] = {}
+    for sim in similarities:
+        if sim.id in sim_dict:
+            sim_dict[sim.id].doc += "\n" + sim.doc
+        else:
+            sim_dict[sim.id] = sim
+
+    # rrf와 제목의 id가 겹치면 엎어질 수 있으므로 rrf와 마찬가지로 loop 돌면서 새로 구성
+    # search_doc_results = {sim.id: sim.doc for sim in similarities}
+    search_doc_results = {sim.id: sim.doc for sim in sim_dict.values()}
     response_json_str = claude.create_response_text(
         messages=[
             {

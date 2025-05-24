@@ -211,8 +211,8 @@ class DocentBot:
 
     def _present_relic(self):
         self.instruction.add_guide(self.relics, self.messages)
-        # response_message = claude.create_response_text(messages=self.messages)
-        response_message = "test...."
+        response_message = claude.create_response_text(messages=self.messages)
+        # response_message = "test...."
         self.messages.append({"role": "assistant", "content": response_message})
         self.relics.set_presented(True)
 
