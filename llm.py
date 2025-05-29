@@ -78,7 +78,7 @@ class LLM:
         temperature: float = 0,
         max_tokens: int = 2048,
         tools: dict | None = None,
-        tool_choice: dict = {"type": "auto"},
+        tool_choice: dict[str, str] = {"type": "auto"},
         tool_system_prompt: str | None = None,
         stop_sequences: list[str] = [],
     ):
