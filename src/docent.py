@@ -6,9 +6,9 @@ from src.llm.prompt_templates import (
     revisit_instruction,
     guide_program_prompt,
 )
-from src.utils import get_base64_data
-from src.llm import claude_3_7 as claude
-from src.llm.tools import use_tools
+from utils import get_base64_data
+from llm import claude_3_7 as claude
+from llm.tools import use_tools
 
 client = Anthropic()
 

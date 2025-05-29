@@ -1,5 +1,5 @@
 from anthropic import Anthropic
-from src.llm.prompt_templates import system_prompt, tool_system_prompt
+from llm.prompt_templates import system_prompt, tool_system_prompt
 
 
 class LLM:

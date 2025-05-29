@@ -3,9 +3,9 @@ from anthropic import Anthropic
 import os
 from typing import Literal
 from pydantic import BaseModel, Field
-from src.llm.prompt_templates import history_based_prompt
-from src.llm import claude_3_7 as claude
-from src.llm.vector_search import (
+from llm.prompt_templates import history_based_prompt
+from llm import claude_3_7 as claude
+from llm.vector_search import (
     title_collection,
     content_collection,
     description_collection,
