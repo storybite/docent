@@ -1,9 +1,4 @@
 __pycache__/
-#*.ipynb
 .env
-/test
-venv_dcnt
-/scrap2/database
-/scrap2/database_bk
-/scrap3/relics
-.streamlit/secrets.toml
+venv_dcnt/
+*.log
