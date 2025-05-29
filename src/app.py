@@ -5,8 +5,8 @@ import asyncio
 import streamlit as st
 import threading
 from concurrent.futures import Future
-from src.reservation.reservation_agent import ReservationAgent
-from src.docent import DocentBot
+from reservation.reservation_agent import ReservationAgent
+from docent import DocentBot
 
 # Streamlit 페이지 설정
 st.set_page_config(page_title="도슨트 봇", page_icon="🎭", layout="centered")
