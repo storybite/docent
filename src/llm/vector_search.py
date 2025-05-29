@@ -1,10 +1,8 @@
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 import numpy as np
 import os
 from pathlib import Path
 from openai import OpenAI
-import dill
 from llm import claude_3_7 as claude
 from llm.prompt_templates import search_result_filter
 import json
