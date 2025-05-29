@@ -5,8 +5,8 @@ import os
 from pathlib import Path
 from openai import OpenAI
 import dill
-from src.llm import claude_3_7 as claude
-from src.llm.prompt_templates import search_result_filter
+from llm import claude_3_7 as claude
+from llm.prompt_templates import search_result_filter
 import json
 import re
 
@@ -37,37 +37,54 @@ class Collecton:
 
     _instances = {}
 
-    def __new__(cls, file_name: str):
-        if file_name not in cls._instances:
+    def __new__(cls, name: str):
+        if name not in cls._instances:
             instance = super().__new__(cls)
-            cls._instances[file_name] = instance
-        return cls._instances[file_name]
+            cls._instances[name] = instance
+        return cls._instances[name]
 
-    def __init__(self, file_name: str):
+    def __init__(self, name: str):
         if getattr(self, "_initialized", False):
             return
 
-        self.file_path = str(Path("data") / "database" / f"{file_name}.dill")
+        self.file_path = str(Path("..") / "data" / "vector_store" / f"{name}")
         self.index: dict[str, DocEmbeddings] = {}
         self._initialized = True
 
     def load(self) -> "Collecton":
-        try:
-            with open(self.file_path, "rb") as f:
-                self.index = dill.load(f)
-        except Exception as e:
-            raise e
+        # Load metadata from JSON file
+        with open(f"{self.file_path}_meta.json", "r", encoding="utf-8") as f:
+            docs_list = json.load(f)
+
+        # Load embeddings from numpy file
+        embeddings_array = np.load(f"{self.file_path}_embeddings.npy")
+
+        # Create DocEmbeddings objects and store in index
+        for doc, embedding in zip(docs_list, embeddings_array):
+            self.index[doc["id"]] = DocEmbeddings(
+                id=doc["id"], doc=doc["doc"], embeddings=embedding.tolist()
+            )
+
         return self
 
     def add_doc(self, id: str, doc: str):
         self.index[id] = DocEmbeddings(id=id, doc=doc)
 
     def build(self):
-        for doc_embeddings in self.index.values():
-            doc_embeddings.embeddings = self._get_embeddings(doc_embeddings.doc)
+        embeddings_list = []
+        docs_list = []
 
-        with open(self.file_path, "wb") as f:
-            dill.dump(self.index, f)
+        for doc_embeddings in self.index.values():
+            embeddings = self._get_embeddings(doc_embeddings.doc)
+            doc_embeddings.embeddings = embeddings
+            embeddings_list.append(embeddings)
+            docs_list.append({"id": doc_embeddings.id, "doc": doc_embeddings.doc})
+
+        embeddings_array = np.array(embeddings_list)
+        np.save(f"{self.file_path}_embeddings.npy", embeddings_array)
+
+        with open(f"{self.file_path}_meta.json", "w", encoding="utf-8") as f:
+            json.dump(docs_list, f, ensure_ascii=False, indent=2)
 
     def query(self, query: str, cutoff=0.4, top_k: int = 60) -> dict[int, Similarity]:
         query_embeddings = self._get_embeddings(query)
@@ -99,140 +116,6 @@ class Collecton:
 
     def __len__(self) -> int:
         return len(self.index)
-
-
-# def get_rrf(sim1: dict[str, Similarity], sim2: dict[str, Similarity], k: int = 60):
-#     union_ids = set(sim1) | set(sim2)
-#     results = []
-#     for _id in union_ids:
-#         r1 = sim1[_id].rank if _id in sim1 else None
-#         r2 = sim2[_id].rank if _id in sim2 else None
-
-#         score = (1 / (k + r1) if r1 is not None else 0) + (
-#             1 / (k + r2) if r2 is not None else 0
-#         )
-
-#         obj = sim1.get(_id) or sim2.get(_id)  # 둘 중 하나를 대표로
-#         obj.rrf_score = score
-#         results.append(obj)
-
-#     return sorted(results, key=lambda o: o.rrf_score, reverse=True)
-
-# def get_rrf(
-#     sim1: dict[str, Similarity],
-#     sim2: dict[str, Similarity],
-#     sim3: dict[str, Similarity],
-#     k: int = 60,
-# ):
-#     union_ids = set(sim1) | set(sim2) | set(sim3)
-#     results = []
-#     for _id in union_ids:
-#         r1 = sim1[_id].rank if _id in sim1 else None
-#         r2 = sim2[_id].rank if _id in sim2 else None
-#         r3 = sim3[_id].rank if _id in sim3 else None
-
-#         score = (
-#             (0.99 / (k + r1) if r1 is not None else 0)
-#             + (0.0001 / (k + r2) if r2 is not None else 0)
-#             + (0.0001 / (k + r3) if r3 is not None else 0)
-#         )
-
-#         obj = sim1.get(_id) or sim2.get(_id) or sim3.get(_id)  # 셋 중 하나를 대표로
-#         obj.docs = "\n".join(
-#             [
-#                 sim1.get(_id).doc if sim1.get(_id) else "",
-#                 sim2.get(_id).doc if sim2.get(_id) else "",
-#                 sim3.get(_id).doc if sim3.get(_id) else "",
-#             ]
-#         ).strip()
-#         obj.rrf_score = score
-#         results.append(obj)
-
-#     return sorted(results, key=lambda o: o.rrf_score, reverse=True)
-
-from collections import defaultdict
-from typing import Dict, List, Optional
-
-# 이미 선언되어 있다고 가정
-# @dataclass(slots=True)
-# class Similarity:
-#     id: str
-#     doc: str
-#     score: float
-#     rank: int = None
-#     rrf_score: float = None
-#     docs: str = ""          # 여러 시스템 문서 병합용(필요 시)
-
-
-def get_rrf_2(
-    sim_dicts: list[Dict[str, Similarity]],
-    k: int = 60,
-    weights: list[float] | None = None,
-) -> List["Similarity"]:
-
-    n_systems = len(sim_dicts)
-    if n_systems == 0:
-        return []
-
-    # 모든 id 집합
-    union_ids = set().union(*(d.keys() for d in sim_dicts))
-
-    results: List["Similarity"] = []
-
-    for _id in union_ids:
-        rrf_score = 0.0
-        merged_docs: List[str] = []
-        representative_obj: Optional["Similarity"] = None
-
-        # 각 시스템별 정보 누적
-        for weight, sim in zip(weights, sim_dicts):
-            obj = sim.get(_id)
-            if obj is None:
-                continue
-
-            if obj.rank is not None:
-                rrf_score += weight / (k + obj.rank)
-
-            merged_docs.append(obj.doc)
-            if representative_obj is None:
-                representative_obj = obj  # 첫 등장 객체를 대표로
-
-        # 대표 객체는 최소 한 번 존재
-        rep = representative_obj
-        rep.docs = "\n".join(merged_docs).strip()
-        rep.rrf_score = rrf_score
-        results.append(rep)
-
-    # RRF 점수로 내림차순 정렬
-    return sorted(results, key=lambda o: o.rrf_score, reverse=True)
-
-
-def get_rrf_3(
-    sim1: dict[str, Similarity],
-    sim2: dict[str, Similarity],
-    k: int = 60,
-):
-    union_ids = set(sim1) | set(sim2)
-    results = []
-    for _id in union_ids:
-        r1 = sim1[_id].rank if _id in sim1 else None
-        r2 = sim2[_id].rank if _id in sim2 else None
-
-        score = (0.7 / (k + r1) if r1 is not None else 0) + (
-            0.3 / (k + r2) if r2 is not None else 0
-        )
-
-        obj = sim1.get(_id) or sim2.get(_id)  # 둘 중 하나를 대표로
-        obj.docs = "\n".join(
-            [
-                sim1.get(_id).doc if sim1.get(_id) else "",
-                sim2.get(_id).doc if sim2.get(_id) else "",
-            ]
-        ).strip()
-        obj.rrf_score = score
-        results.append(obj)
-
-    return sorted(results, key=lambda o: o.rrf_score, reverse=True)
 
 
 def get_rrf(
@@ -294,37 +177,6 @@ def filter_results(similarities: list[Similarity], query: str):
             filtered_similarities.append(search_sim_results[id])
 
     return filtered_similarities
-
-
-def get_rrf_bkup(
-    sim1: dict[str, Similarity],
-    sim2: dict[str, Similarity],
-    k: int = 60,
-    w1: float = 0.7,
-    w2: float = 0.3,
-):
-
-    default_rank = len(sim2) + 1  # 보조 리스트 꼴찌보다 한 칸 뒤
-    union_ids = set(sim1) | set(sim2)
-    results = []
-
-    for _id in union_ids:
-        r1 = sim1.get(_id)  # 첫 번째는 반드시 중요
-        r2 = sim2.get(_id)
-
-        # 첫 번째 리스트에 없는 문서라면? → 완전히 제외하거나, 약한 패널티를 줘도 됨
-        if r1 is None:
-            continue  # '주 리스트에 없으면 버린다' 선택지
-
-        rank1 = r1.rank
-        rank2 = r2.rank if r2 else default_rank
-
-        rrf_score = w1 / (k + rank1) + w2 / (k + rank2)
-
-        r1.rrf_score = rrf_score
-        results.append(r1)
-
-    return sorted(results, key=lambda s: s.rrf_score, reverse=True)
 
 
 HANJA_RE = re.compile(
