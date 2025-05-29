@@ -1,7 +1,7 @@
 from anthropic import Anthropic
 import json
 from pathlib import Path
-from src.llm.prompt_templates import (
+from llm.prompt_templates import (
     guide_instruction,
     revisit_instruction,
     guide_program_prompt,
