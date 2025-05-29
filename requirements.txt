@@ -64,9 +64,6 @@ mcp==1.9.1
 mcp-server-time==0.6.2
 mdurl==0.1.2
 multidict==6.4.4
-mysql==0.0.3
-mysql-connector==2.2.9
-mysqlclient==2.2.7
 narwhals==1.24.2
 nest-asyncio==1.6.0
 numpy==2.2.2
