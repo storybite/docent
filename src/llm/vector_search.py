@@ -7,11 +7,18 @@ from llm import claude_3_7 as claude
 from llm.prompt_templates import search_result_filter
 import json
 import re
+import streamlit as st
 
 
 print(
     "upstage=============================================>",
     os.getenv("UPSTAGE_API_KEY"),
+    "anthropic=============================================>",
+    os.getenv("ANTHROPIC_API_KEY"),
+    "slack_bot_token=============================================>",
+    os.getenv("slack_bot_token"),
+    "UPSTAGE_API_KEY=============================================>",
+    st.secrets["UPSTAGE_API_KEY"],
 )
 
 upstage = OpenAI(
