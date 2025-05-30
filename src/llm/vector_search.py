@@ -7,9 +7,6 @@ from llm import claude_3_7 as claude
 from llm.prompt_templates import search_result_filter
 import json
 import re
-from dotenv import load_dotenv
-
-load_dotenv()
 
 upstage = OpenAI(
     api_key=os.getenv("UPSTAGE_API_KEY"), base_url="https://api.upstage.ai/v1"
@@ -48,7 +45,7 @@ class Collecton:
         if getattr(self, "_initialized", False):
             return
 
-        self.file_path = str(Path("..") / "data" / "vector_store" / f"{name}")
+        self.file_path = str(Path("data") / "vector_store" / f"{name}")
         self.index: dict[str, DocEmbeddings] = {}
         self._initialized = True
 
