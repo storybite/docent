@@ -8,6 +8,12 @@ from llm.prompt_templates import search_result_filter
 import json
 import re
 
+
+print(
+    "upstage=============================================>",
+    os.getenv("UPSTAGE_API_KEY"),
+)
+
 upstage = OpenAI(
     api_key=os.getenv("UPSTAGE_API_KEY"), base_url="https://api.upstage.ai/v1"
 )
