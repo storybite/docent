@@ -13,10 +13,20 @@ import streamlit as st
 print(
     "upstage=============================================>",
     os.getenv("UPSTAGE_API_KEY"),
+)
+print(
     "anthropic=============================================>",
     os.getenv("ANTHROPIC_API_KEY"),
+)
+print(
     "slack_bot_token=============================================>",
     os.getenv("slack_bot_token"),
+)
+print(
+    "ANTHROPIC_API_KEY-2=============================================>",
+    st.secrets["ANTHROPIC_API_KEY"],
+)
+print(
     "UPSTAGE_API_KEY=============================================>",
     st.secrets["UPSTAGE_API_KEY"],
 )
