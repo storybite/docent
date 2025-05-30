@@ -54,6 +54,9 @@ class Similarity:
     collection_name: str = ""  # 추가
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
 class Collecton:
 
     _instances = {}
@@ -68,7 +71,7 @@ class Collecton:
         if getattr(self, "_initialized", False):
             return
 
-        self.file_path = str(Path("data") / "vector_store" / f"{name}")
+        self.file_path = str(PROJECT_ROOT / "data" / "vector_store" / f"{name}")
         self.index: dict[str, DocEmbeddings] = {}
         self._initialized = True
 
