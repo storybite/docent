@@ -1,0 +1,7 @@
+# .pre-commit-config.yaml  ← 그대로 복붙
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.2          # 최신 태그(변경 가능)
+    hooks:
+      - id: gitleaks
+        args: ["protect", "--redact"]
