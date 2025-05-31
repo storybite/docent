@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import numpy as np
 import os
-from pathlib import Path
+from src.utils import project_root
 from openai import OpenAI
 from .llm import claude_3_7 as claude
 from .prompt_templates import search_result_filter

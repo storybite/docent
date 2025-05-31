@@ -3,3 +3,4 @@ __pycache__/
 venv_dcnt/
 *.log
 secrets.toml
+easy/api_key.ipynb
