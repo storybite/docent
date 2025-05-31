@@ -6,7 +6,7 @@ import streamlit as st
 import threading
 from concurrent.futures import Future
 from reservation.reservation_agent import ReservationAgent
-from src.llm import DocentBot
+from llm import DocentBot
 
 # Streamlit 페이지 설정
 st.set_page_config(page_title="도슨트 봇", page_icon="🎭", layout="centered")

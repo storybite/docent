@@ -83,7 +83,7 @@ class LLM:
         stop_sequences: list[str] = [],
     ):
         if not tools:
-            from src.llm.tools import tools as imported_tools
+            from llm.tools import tools as imported_tools
 
             tools = imported_tools
         try:

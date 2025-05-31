@@ -10,9 +10,9 @@ from datetime import timedelta
 import asyncio
 import base64
 
-from src.llm import claude_3_7 as claude
-from src.llm.prompt_templates import slackbot_system_prompt, slackbot_message
-from src.reservation.email_sender import send_success_mail, send_fail_mail
+from llm import claude_3_7 as claude
+from llm.prompt_templates import slackbot_system_prompt, slackbot_message
+from reservation.email_sender import send_success_mail, send_fail_mail
 
 config = {
     "token": os.getenv("slack_bot_token"),
