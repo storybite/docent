@@ -6,7 +6,7 @@ import streamlit as st
 import threading
 from concurrent.futures import Future
 from reservation.reservation_agent import ReservationAgent
-from docent import DocentBot
+from src.llm import DocentBot
 
 # Streamlit 페이지 설정
 st.set_page_config(page_title="도슨트 봇", page_icon="🎭", layout="centered")
@@ -47,11 +47,6 @@ st.markdown(
             font-size: 18px;
             margin-bottom: 15px;
             color: #333;
-        }
-
-        /* 채팅 메시지 컨테이너의 최대 너비 조정 */
-        .stChatInput {
-            margin-left: -5rem;
         }
 
          .stSpinner {

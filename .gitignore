@@ -2,4 +2,4 @@ __pycache__/
 .env
 venv_dcnt/
 *.log
-.streamlit/secrets.toml
+secrets.toml
