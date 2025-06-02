@@ -4,3 +4,4 @@ venv_dcnt/
 *.log
 secrets.toml
 easy/api_key.ipynb
+easy/backup.ipynb
