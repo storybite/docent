@@ -4,7 +4,7 @@ from pprint import pprint
 
 client = Client("http://127.0.0.1:8000/mcp")
 # client = Client("courese_server.py")
-d
+sdsdsd
 
 
 async def call_mcp():
