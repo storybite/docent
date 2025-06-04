@@ -1,8 +1,11 @@
 from typing import Optional
 from contextlib import AsyncExitStack
 import traceback
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+
+# from mcp import ClientSession
+from fastmcp import Client
+
+# from mcp.client.streamable_http import streamablehttp_client
 import json
 import os
 from pydantic import BaseModel, Field
@@ -68,24 +71,25 @@ report_reservation = {
 class ReservationAgent:
 
     def __init__(self):
-        self.session: Optional[ClientSession] = None
+        # self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
         self.tools = []
 
     async def connect_sse_server(self):
         try:
-            streams = await self.exit_stack.enter_async_context(
-                streamablehttp_client(url)
-            )
+            # streams = await self.exit_stack.enter_async_context(
+            #     streamablehttp_client(url)
+            # )
             self.session = await self.exit_stack.enter_async_context(
-                ClientSession(*streams)
+                # ClientSession(*streams)
+                Client(url)
             )
             # ──────────── 몽키 패치 구간 ──────────
-            if callable(getattr(self.session, "_session_read_timeout_seconds", None)):
-                # 필요하면 원하는 시간으로 수정 (예: 10초)
-                self.session._session_read_timeout_seconds = timedelta(seconds=10)
-            # ───────────────────────────────────────
-            await self.session.initialize()
+            # if callable(getattr(self.session, "_session_read_timeout_seconds", None)):
+            #     # 필요하면 원하는 시간으로 수정 (예: 10초)
+            #     self.session._session_read_timeout_seconds = timedelta(seconds=10)
+            # # ───────────────────────────────────────
+            # await self.session.initialize()
             print("MCP 서버 연결 완료")
             mcp_tools = await self.session.list_tools()
             self.tools = [
@@ -94,7 +98,8 @@ class ReservationAgent:
                     "description": tool.description,
                     "input_schema": modify_input_schema(tool.inputSchema),
                 }
-                for tool in mcp_tools.tools
+                # for tool in mcp_tools.tools
+                for tool in mcp_tools
             ] + [report_reservation]
             print(f"도구 목록: {[tool['name'] for tool in self.tools]}")
 
@@ -104,15 +109,18 @@ class ReservationAgent:
             raise e
 
     async def _polling_result(self, tool_name, tool_args, tool_result):
-        for _ in range(1, 10):
-            message = json.loads(tool_result.model_dump()["content"][0]["text"])[
-                "messages"
-            ]
-            if len(message) >= 1:
-                return tool_result
-            await asyncio.sleep(1)
-            tool_result = await self.session.call_tool(tool_name, tool_args)
-        raise ValueError("Too many tries")
+        try:
+            for _ in range(1, 10):
+                message = json.loads(tool_result[0].text)["messages"]
+                if len(message) >= 1:
+                    return tool_result
+                await asyncio.sleep(1)
+                tool_result = await self.session.call_tool(tool_name, tool_args)
+            raise ValueError("Too many tries")
+        except Exception as e:
+            print(f"폴링 중 오류 발생: {e}")
+            traceback.print_exc()
+            raise e
 
     async def _delegate_to_slackbot(self, messages: list[dict]):
         response = self._call_llm(messages)

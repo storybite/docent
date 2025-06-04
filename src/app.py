@@ -342,10 +342,17 @@ def main_page():
                         st.error(f"SSE 서버 연결 실패: {future.exception()}")
                         return
 
-                    run_async(resv_agent.make_reservation(application))
+                    # run_async(resv_agent.make_reservation(application))
+                    # try:
+                    #     st.session_state.future_resv = run_async(
+                    #         st.session_state.resv_agent.make_reservation(application)
+                    #     )
+                    # except Exception as e:
+                    #     st.error("예약 처리 중 예외 발생: " + str(e))
+
                     try:
                         st.session_state.future_resv = run_async(
-                            st.session_state.resv_agent.make_reservation(application)
+                            resv_agent.make_reservation(application)
                         )
                     except Exception as e:
                         st.error("예약 처리 중 예외 발생: " + str(e))
