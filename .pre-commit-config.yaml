@@ -5,7 +5,7 @@ repos:
         name: "Custom Python Check"
         entry: python easy/backup.py
         language: system
-        stages: [commit, post-checkout]
+        stages: [pre-commit, post-checkout]
 
 
 #pip install pre-commit          # 한 번만
