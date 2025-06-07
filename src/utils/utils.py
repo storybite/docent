@@ -3,8 +3,18 @@ from PIL import Image
 from IPython.display import display
 from io import BytesIO
 from pathlib import Path
+from pydantic import Field, BaseModel
+from typing import Optional
 
 project_root = Path(__file__).parents[2]
+
+
+class Report(BaseModel):
+    is_success: bool = Field(description="예약 성공 여부")
+    thread_ts: str = Field(description="스레드의 timestamp")
+    channel_id: str = Field(description="스레드가 있는 채널의 id")
+    docent_name: Optional[str] = Field(description="예약된 경우 도슨트의 이름")
+    docent_email: Optional[str] = Field(description="예약된 경우 도슨트의 이메일")
 
 
 def get_base64_data(file_path):

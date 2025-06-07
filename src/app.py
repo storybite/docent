@@ -140,7 +140,7 @@ def get_reservation_agent():
     agent = ReservationAgent()
     # SSE 연결을 백그라운드에서 시작 (불-앤-포겟)
     # SSE 연결을 이벤트 루프에서 실행
-    future = run_async(agent.connect_sse_server())
+    future = run_async(agent.connect_server())
     return agent, future
 
 
@@ -167,7 +167,7 @@ def check_background_jobs():
 
 
 check_background_jobs()
-resv_agent, future = get_reservation_agent()
+resv_agent, mcp_connection_future = get_reservation_agent()
 
 
 def init_page():
@@ -263,7 +263,7 @@ def main_page():
             st.markdown(how_to_use)
 
             with st.form("docent_program_form"):
-                st.subheader("도슨트 프로그램 신청")
+                st.subheader("문화해설 프로그램 신청")
 
                 program = st.selectbox(
                     label="프로그램을 선택하세요.",
@@ -332,24 +332,20 @@ def main_page():
                         "applicant_email": applicant_email,
                     }
                     # ① 아직 연결 중이라면: 메시지만 띄우고 함수 종료``
-                    if not future.done():
+                    if not mcp_connection_future.done():
                         st.error(
-                            "SSE 서버에 연결 중입니다. 연결이 완료되면 다시 '신청하기'를 눌러 주세요."
+                            "MCP 서버에 연결 중입니다. 연결이 완료되면 다시 '신청하기'를 눌러 주세요."
                         )
                         return
 
-                    if future.done() and future.exception():
-                        st.error(f"SSE 서버 연결 실패: {future.exception()}")
+                    if (
+                        mcp_connection_future.done()
+                        and mcp_connection_future.exception()
+                    ):
+                        st.error(
+                            f"MCP 서버 연결 실패: {str(mcp_connection_future.exception())}"
+                        )
                         return
-
-                    # run_async(resv_agent.make_reservation(application))
-                    # try:
-                    #     st.session_state.future_resv = run_async(
-                    #         st.session_state.resv_agent.make_reservation(application)
-                    #     )
-                    # except Exception as e:
-                    #     st.error("예약 처리 중 예외 발생: " + str(e))
-
                     try:
                         st.session_state.future_resv = run_async(
                             resv_agent.make_reservation(application)
@@ -362,7 +358,7 @@ def main_page():
                 else:
 
                     st.markdown(
-                        "🔔도슨트가 배정되면 이메일로 알려드립니다.  \n🚨부득이한 사정으로 취소해야 할 경우 방문일 전일까지 배정된 도슨트님의 이메일로 통지 부탁드립니다."
+                        "🔔문화해설사님이 배정되면 이메일로 알려드립니다.  \n🚨부득이한 사정으로 취소해야 할 경우 방문일 전일까지 배정된 문화해설사님의 이메일로 통지 부탁드립니다."
                     )
 
     def chat_area():

@@ -1,21 +1,19 @@
 from typing import Optional
 from contextlib import AsyncExitStack
 import traceback
-
-# from mcp import ClientSession
 from fastmcp import Client
-
-# from mcp.client.streamable_http import streamablehttp_client
 import json
 import os
 from pydantic import BaseModel, Field
-from datetime import timedelta
 import asyncio
 import base64
+import sys
 
 from llm import claude_3_7 as claude
 from llm.prompt_templates import slackbot_system_prompt, slackbot_message
 from reservation.email_sender import send_success_mail, send_fail_mail
+
+# from src.utils import project_root, Report
 
 config = {
     "token": os.getenv("slack_bot_token"),
@@ -26,6 +24,17 @@ config_b64 = base64.urlsafe_b64encode(config_json).decode()  # str
 smithery_api_key = os.getenv("smithery_api_key")
 
 url = f"https://server.smithery.ai/@smithery-ai/slack/mcp?config={config_b64}&api_key={smithery_api_key}"
+
+config = {
+    "mcpServers": {
+        "slack": {"url": url, "transport": "streamable-http"},
+        # # "local": {"url": "http://127.0.0.1:8000/mcp", "transport": "streamable-http"},
+        # "local": {
+        #     "command": "python",
+        #     "args": [str(project_root / "src" / "reservation" / "mcp_utils_server.py")],
+        # },
+    }
+}
 
 application_template = """
 🏺 프로그램: {program}
@@ -71,26 +80,25 @@ report_reservation = {
 class ReservationAgent:
 
     def __init__(self):
-        # self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
-        self.tools = []
+        self.tools: list[dict] = []
+        self._lock = asyncio.Lock()
+        print(config)
 
-    async def connect_sse_server(self):
+    async def connect_server(self, timeout: float = 10.0):
         try:
-            # streams = await self.exit_stack.enter_async_context(
-            #     streamablehttp_client(url)
-            # )
             self.session = await self.exit_stack.enter_async_context(
-                # ClientSession(*streams)
-                Client(url)
+                Client(config, timeout=timeout)
             )
-            # ──────────── 몽키 패치 구간 ──────────
-            # if callable(getattr(self.session, "_session_read_timeout_seconds", None)):
-            #     # 필요하면 원하는 시간으로 수정 (예: 10초)
-            #     self.session._session_read_timeout_seconds = timedelta(seconds=10)
-            # # ───────────────────────────────────────
-            # await self.session.initialize()
+            await self.setup_context()
             print("MCP 서버 연결 완료")
+        except Exception as e:
+            print(f"MCP 서버 연결 실패: {e}")
+            traceback.print_exc()
+            raise RuntimeError(str(e))
+
+    async def setup_context(self):
+        try:
             mcp_tools = await self.session.list_tools()
             self.tools = [
                 {
@@ -98,15 +106,24 @@ class ReservationAgent:
                     "description": tool.description,
                     "input_schema": modify_input_schema(tool.inputSchema),
                 }
-                # for tool in mcp_tools.tools
                 for tool in mcp_tools
             ] + [report_reservation]
             print(f"도구 목록: {[tool['name'] for tool in self.tools]}")
 
         except Exception as e:
-            print(f"MCP 서버 연결 실패: {e}")
+            print(f"도구 Setup 실패: {e}")
             traceback.print_exc()
             raise e
+
+    def _call_llm(self, messages: list[dict]):
+        response = claude.create_tool_response(
+            messages=messages,
+            temperature=0.0,
+            max_tokens=1024,
+            tools=self.tools,
+            tool_system_prompt=slackbot_system_prompt,
+        )
+        return response
 
     async def _polling_result(self, tool_name, tool_args, tool_result):
         try:
@@ -143,7 +160,7 @@ class ReservationAgent:
                     tool_name, tool_args, tool_result
                 )
 
-            print(tool_result)
+            print(f"tool_result: {tool_result}")
             messages.extend(
                 [
                     {"role": "assistant", "content": response.content},
@@ -164,7 +181,7 @@ class ReservationAgent:
                 raise ValueError("Too many tries")
             tries += 1
 
-    async def make_reservation(self, application: dict):
+    async def _make_reservation(self, application: dict):
         application_without_email = {
             k: v for k, v in application.items() if k != "applicant_email"
         }
@@ -183,15 +200,9 @@ class ReservationAgent:
         else:
             send_fail_mail(receiver)
 
-    def _call_llm(self, messages: list[dict]):
-        response = claude.create_tool_response(
-            messages=messages,
-            temperature=0.0,
-            max_tokens=1024,
-            tools=self.tools,
-            tool_system_prompt=slackbot_system_prompt,
-        )
-        return response
+    async def make_reservation(self, application: dict):
+        async with self._lock:
+            await self._make_reservation(application)
 
     async def cleanup(self):
         try:

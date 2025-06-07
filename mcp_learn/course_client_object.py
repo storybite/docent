@@ -8,9 +8,9 @@ class CourseClient:
 
     def __init__(self):
         self.exit_stack = AsyncExitStack()
-        self.tools = []
-        self.resource_map = {}
-        self.prompt_map = {}
+        self.tools: list[dict] = []
+        self.resource_map: dict[str, str] = {}
+        self.prompt_map: dict[str, list[str]] = {}
 
     async def connect_server(self):
         try:
