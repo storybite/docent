@@ -8,6 +8,14 @@ from concurrent.futures import Future
 from reservation.reservation_agent import ReservationAgent
 from llm import DocentBot
 
+import logging
+from utils import setup_logging, logger
+
+setup_logging()
+
+logger = logging.getLogger(__name__)
+logger.info("도슨트 봇 시작 >>>>>")
+
 # Streamlit 페이지 설정
 st.set_page_config(page_title="도슨트 봇", page_icon="🎭", layout="centered")
 
@@ -330,6 +338,9 @@ def main_page():
                         "visit_hours": visit_hours,
                         "visitors": visitors,
                         "applicant_email": applicant_email,
+                        "application_time": datetime.datetime.now().strftime(
+                            "%Y.%m.%d %H:%M:%S.%f"
+                        ),
                     }
                     # ① 아직 연결 중이라면: 메시지만 띄우고 함수 종료``
                     if not mcp_connection_future.done():

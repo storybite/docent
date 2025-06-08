@@ -1,13 +1,7 @@
 import smtplib
 from email.mime.text import MIMEText
 import os
-
-email_fail_template = """
-문화해설사 예약이 실패했습니다. 담당자가 확인 후 메일 드리겠습니다.
-불편을 끼친 점 양해 부탁드립니다.
-
-감사합니다.
-""".strip()
+import logging
 
 email_success_template = """
 안녕하세요? 문화해설사 예약이 완료되었습니다.
@@ -24,6 +18,13 @@ email_success_template = """
 🏛 국립중앙박물관 1층 기획전시실 앞
 
 ✨ 유익하고 즐거운 시간되시길 바랍니다. 감사합니다!
+""".strip()
+
+email_fail_template = """
+문화해설사 예약이 실패했습니다. 담당자가 확인 후 메일 드리겠습니다.
+불편을 끼친 점 양해 부탁드립니다.
+
+감사합니다.
 """.strip()
 
 
@@ -43,7 +44,7 @@ def send_mail(sender: str, receiver: str, cc: str, subject: str, body: str):
 
     smtp_server.sendmail(sender, recipients, msg.as_string())
     smtp_server.quit()
-    print("메일 전송 완료")
+    logging.info("메일 전송 완료")
 
 
 def send_success_mail(application_form: str, receiver: str, bot_response: dict):

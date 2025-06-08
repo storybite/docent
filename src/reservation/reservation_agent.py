@@ -1,3 +1,5 @@
+import os
+
 from typing import Optional
 from contextlib import AsyncExitStack
 import traceback
@@ -7,32 +9,35 @@ import os
 from pydantic import BaseModel, Field
 import asyncio
 import base64
-import sys
 
 from llm import claude_3_7 as claude
 from llm.prompt_templates import slackbot_system_prompt, slackbot_message
-from reservation.email_sender import send_success_mail, send_fail_mail
+from .email_sender import send_success_mail, send_fail_mail
+import logging
 
-# from src.utils import project_root, Report
+logger = logging.getLogger(__name__)
 
-config = {
-    "token": os.getenv("slack_bot_token"),
-}
-
-config_json = json.dumps(config, separators=(",", ":")).encode()
-config_b64 = base64.urlsafe_b64encode(config_json).decode()  # str
 smithery_api_key = os.getenv("smithery_api_key")
 
-url = f"https://server.smithery.ai/@smithery-ai/slack/mcp?config={config_b64}&api_key={smithery_api_key}"
+slack_config = {
+    "token": os.getenv("slack_bot_token"),
+}
+slack_config_json = json.dumps(slack_config, separators=(",", ":")).encode()
+slack_config_b64 = base64.urlsafe_b64encode(slack_config_json).decode()
+
+weather_config = {}
+weather_config_json = json.dumps(weather_config, separators=(",", ":")).encode()
+weather_config_b64 = base64.urlsafe_b64encode(weather_config_json).decode()
+
+
+slack_url = f"https://server.smithery.ai/@smithery-ai/slack/mcp?config={slack_config_b64}&api_key={smithery_api_key}"
+weather_url = f"https://server.smithery.ai/@isdaniel/mcp_weather_server/mcp?config={weather_config_b64}&api_key={smithery_api_key}"
+
 
 config = {
     "mcpServers": {
-        "slack": {"url": url, "transport": "streamable-http"},
-        # # "local": {"url": "http://127.0.0.1:8000/mcp", "transport": "streamable-http"},
-        # "local": {
-        #     "command": "python",
-        #     "args": [str(project_root / "src" / "reservation" / "mcp_utils_server.py")],
-        # },
+        "slack": {"url": slack_url, "transport": "streamable-http"},
+        "weather": {"url": weather_url, "transport": "streamable-http"},
     }
 }
 
@@ -41,6 +46,7 @@ application_template = """
 📅 방문일자: {visit_date}
 ⏰ 방문시간: {visit_hours}
 👥 방문인원: {visitors}
+🕒 신청일시: {application_time}
 """.strip()
 
 
@@ -83,17 +89,17 @@ class ReservationAgent:
         self.exit_stack = AsyncExitStack()
         self.tools: list[dict] = []
         self._lock = asyncio.Lock()
-        print(config)
+        self.reply_ts: dict[str, float] = {}
 
-    async def connect_server(self, timeout: float = 10.0):
+    async def connect_server(self, timeout: float = 30.0):
         try:
             self.session = await self.exit_stack.enter_async_context(
                 Client(config, timeout=timeout)
             )
             await self.setup_context()
-            print("MCP 서버 연결 완료")
+            logger.info("MCP 서버 연결 완료")
         except Exception as e:
-            print(f"MCP 서버 연결 실패: {e}")
+            logger.error(f"MCP 서버 연결 실패: {e}")
             traceback.print_exc()
             raise RuntimeError(str(e))
 
@@ -104,14 +110,15 @@ class ReservationAgent:
                 {
                     "name": tool.name,
                     "description": tool.description,
-                    "input_schema": modify_input_schema(tool.inputSchema),
+                    # "input_schema": modify_input_schema(tool.inputSchema),
+                    "input_schema": tool.inputSchema,
                 }
                 for tool in mcp_tools
             ] + [report_reservation]
-            print(f"도구 목록: {[tool['name'] for tool in self.tools]}")
+            logger.info(f"도구 목록: {[tool['name'] for tool in self.tools]}")
 
         except Exception as e:
-            print(f"도구 Setup 실패: {e}")
+            logger.error(f"도구 Setup 실패: {e}")
             traceback.print_exc()
             raise e
 
@@ -125,21 +132,22 @@ class ReservationAgent:
         )
         return response
 
-    async def _polling_result(self, tool_name, tool_args, tool_result):
-        try:
-            for _ in range(1, 10):
-                message = json.loads(tool_result[0].text)["messages"]
-                if len(message) >= 1:
-                    return tool_result
-                await asyncio.sleep(1)
-                tool_result = await self.session.call_tool(tool_name, tool_args)
-            raise ValueError("Too many tries")
-        except Exception as e:
-            print(f"폴링 중 오류 발생: {e}")
-            traceback.print_exc()
-            raise e
+    async def _polling_result(
+        self, application_id: str, tool_name, tool_args: str, tool_result: dict
+    ):
+        for _ in range(1, 10):
+            message = json.loads(tool_result[0].text)["messages"]
+            if (
+                "latest_reply" in message[0]
+                and float(message[0]["latest_reply"]) > self.reply_ts[application_id]
+            ):
+                self.reply_ts[application_id] = float(message[0]["latest_reply"])
+                return tool_result
+            await asyncio.sleep(3)  # 실제 운영 시에는 대기 시간을 늘려야 함.
+            tool_result = await self.session.call_tool(tool_name, tool_args)
+        return "응답한 문화해설사가 없습니다. 요청 건 취소가 필요합니다."
 
-    async def _delegate_to_slackbot(self, messages: list[dict]):
+    async def _delegate_to_slackbot(self, application_id: str, messages: list[dict]):
         response = self._call_llm(messages)
         tries = 0
         while True:
@@ -147,20 +155,20 @@ class ReservationAgent:
                 content for content in response.content if content.type == "tool_use"
             )
             tool_name, tool_args = tool_content.name, tool_content.input
-            print("call_tool", tool_name, tool_args)
+            logger.info(f"call_tool {tool_name} {tool_args}")
 
             if tool_name == "report_reservation":
                 return tool_args
 
             tool_result = await self.session.call_tool(tool_name, tool_args)
-            print("tool_result", tool_name, tool_args, tool_result)
+            logger.info(f"tool_result {tool_name} {tool_args} {tool_result}")
 
-            if tool_name == "slack_get_thread_replies":
+            if "slack_get_thread_replies" in tool_name:
                 tool_result = await self._polling_result(
-                    tool_name, tool_args, tool_result
+                    application_id, tool_name, tool_args, tool_result
                 )
 
-            print(f"tool_result: {tool_result}")
+            logger.info(f"tool_result: {tool_result}")
             messages.extend(
                 [
                     {"role": "assistant", "content": response.content},
@@ -181,10 +189,16 @@ class ReservationAgent:
                 raise ValueError("Too many tries")
             tries += 1
 
-    async def _make_reservation(self, application: dict):
-        application_without_email = {
-            k: v for k, v in application.items() if k != "applicant_email"
-        }
+    async def make_reservation(self, application: dict):
+        application_without_email = {}
+        for k, v in application.items():
+            if k == "applicant_email":
+                continue
+            if k == "application_time":
+                application_without_email[k] = v.rsplit(".", 1)[0]
+            else:
+                application_without_email[k] = v
+
         application_form = application_template.format(**application_without_email)
         input_messages = [
             {
@@ -193,22 +207,41 @@ class ReservationAgent:
             },
         ]
 
-        slackbot_response = await self._delegate_to_slackbot(input_messages)
+        application_id: str = application["application_time"]
+        self.reply_ts[application_id] = 0.0
+
+        slackbot_response = await self._delegate_to_slackbot(
+            application_id, input_messages
+        )
         receiver = application["applicant_email"]
         if slackbot_response["is_success"]:
             send_success_mail(application_form, receiver, slackbot_response)
         else:
             send_fail_mail(receiver)
 
-    async def make_reservation(self, application: dict):
-        async with self._lock:
-            await self._make_reservation(application)
-
     async def cleanup(self):
         try:
             await self.exit_stack.aclose()
-            print("MCP 서버 연결 해제")
+            logger.info("MCP 서버 연결 해제")
         except Exception as e:
-            print(f"정리 중 오류 발생: {e}")
+            logger.error(f"정리 중 오류 발생: {e}")
             traceback.print_exc()
             raise e
+
+
+async def main():
+    agent = ReservationAgent()
+    await agent.connect_server()
+    await agent.make_reservation(
+        {
+            "program": "대표 유물 해설",
+            "visit_date": "2025-06-09 (월)",
+            "visit_hours": "11:00",
+            "visitors": 1,
+            "applicant_email": "heyjin337@gmail.com",
+        }
+    )
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

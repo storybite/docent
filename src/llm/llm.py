@@ -1,5 +1,5 @@
 from anthropic import Anthropic
-from .prompt_templates import system_prompt, tool_system_prompt
+from .prompt_templates import system_prompt, tool_system_prompt, slackbot_system_prompt
 
 
 class LLM:
@@ -111,7 +111,6 @@ class LLM:
 
 
 # 모델별 싱글턴 인스턴스 생성
-# claude_3_7 = LLM(model_name="claude-3-7-sonnet-20250219", system_prompt=system_prompt)
 claude_3_7 = LLM(model_name="claude-3-7-sonnet-20250219", system_prompt=system_prompt)
 claude_3_5 = LLM(model_name="claude-3-5-sonnet-20240620", system_prompt=system_prompt)
 

@@ -1,0 +1,5 @@
+{'mcpServers': {'slack': {'url': "https://server.smithery.ai/@smithery-ai/slack/mcp?config=b'eyJ0b2tlbiI6ICJ4b3hiLTg4OTgxOTM1NzYxMTItODg5ODIwMDQ2NDI3Mi1kM3d6VlBieTM4anlVRHptYTh1NFhDblEifQ=='&api_key=503211e1-8541-4e3d-a25d-4a8423f9e87a", 'transport': 'streamable-http'}}}
+도구 목록: ['slack_list_channels', 'slack_post_message', 'slack_add_reaction', 'slack_get_channel_history', 'slack_get_thread_replies', 'slack_get_users', 'slack_get_user_profile', 'report_reservation']
+MCP 서버 연결 완료
+{"cache_creation_input_tokens":0,"cache_read_input_tokens":2354,"input_tokens":306,"output_tokens":248,"server_tool_use":null,"service_tier":"standard"}
+call_tool slack_list_channels {'limit': 100, 'cursor': ''}
