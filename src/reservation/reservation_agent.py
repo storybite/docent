@@ -209,15 +209,19 @@ class ReservationAgent:
 
         application_id: str = application["application_time"]
         self.reply_ts[application_id] = 0.0
-
         slackbot_response = await self._delegate_to_slackbot(
             application_id, input_messages
         )
         receiver = application["applicant_email"]
-        if slackbot_response["is_success"]:
-            send_success_mail(application_form, receiver, slackbot_response)
-        else:
-            send_fail_mail(receiver)
+        try:
+            if slackbot_response["is_success"]:
+                send_success_mail(application_form, receiver, slackbot_response)
+            else:
+                send_fail_mail(receiver)
+        except Exception as e:
+            logger.error(f"메일 전송 실패: {e}")
+            traceback.print_exc()
+            raise e
 
     async def cleanup(self):
         try:

@@ -117,13 +117,10 @@ def on_progress(func):
     return result
 
 
-# 1) 앱 전체에서 단 한 번만 실행되는 이벤트 루프
 @st.cache_resource(show_spinner=False)
 def _get_loop() -> asyncio.AbstractEventLoop:
     """
-    • 새로운 이벤트 루프를 만들고
-    • 별도 데몬 스레드에서 run_forever 로 영원히 돌린다.
-    Streamlit 스크립트가 재실행되어도 이 루프는 그대로 유지된다.
+    새로운 이벤트 루프를 만들고 별도 데몬 스레드에서 run_forever로 영원히 돌린다.Streamlit 스크립트가 재실행되어도 이 루프는 그대로 유지된다.
     """
     loop = asyncio.new_event_loop()  # 새 루프
     t = threading.Thread(target=loop.run_forever, daemon=True)
@@ -131,51 +128,48 @@ def _get_loop() -> asyncio.AbstractEventLoop:
     return loop
 
 
-# 2) 아무 코루틴이든 스레드-세이프하게 던져 주는 헬퍼
 def run_async(coro) -> Future:
-    """
-    • `coro` (async 함수 호출 결과)를 백그라운드 루프에 스케줄.
-    • concurrent.futures.Future 를 즉시 반환하므로
-      Streamlit 쪽에서는 동기 코드처럼 상태를 확인할 수 있다.
-    """
+    # concurrent.futures.Future 를 즉시 반환하므로 Streamlit 쪽에서는 동기 코드처럼 상태를 확인할 수 있다.
     loop = _get_loop()
     return asyncio.run_coroutine_threadsafe(coro, loop)
 
 
-# 자원 캐싱 → ReservationAgent도 한 번만 생성
 @st.cache_resource(show_spinner=False)
 def get_reservation_agent():
     agent = ReservationAgent()
-    # SSE 연결을 백그라운드에서 시작 (불-앤-포겟)
-    # SSE 연결을 이벤트 루프에서 실행
     future = run_async(agent.connect_server())
     return agent, future
 
 
-def check_background_jobs():
-    """ThreadPoolExecutor에서 돌아가는 작업(Future)의 결과·예외를 표시하고 정리한다."""
-    future_resv = st.session_state.get("future_resv")
-    if not future_resv:  # 처리 중인 예약이 없으면 바로 종료
-        return
-
-    if not future_resv.done():  # 아직 끝나지 않았으면 잠깐만 스피너로 표시
-        with st.spinner("예약 처리 중…"):
-            time.sleep(0.1)  # 0.1초 정도면 렌더링 부하 거의 없음
-        return
-
-    # 여기까지 왔으면 작업이 끝난 상태이므로 결과·예외를 꺼낸다
-    exc = future_resv.exception()
-    if exc:
-        st.error(f"예약 처리 중 오류: {exc}")
-    else:
-        st.success("예약이 성공적으로 처리됐습니다!")
-
-    # 한 번 표시했으면 세션 상태에서 제거해서 다음 렌더링 땐 안 보이게
-    del st.session_state["future_resv"]
-
-
-check_background_jobs()
 resv_agent, mcp_connection_future = get_reservation_agent()
+
+
+# def check_background_jobs():
+#     """ThreadPoolExecutor에서 돌아가는 작업(Future)의 결과·예외를 표시하고 정리한다."""
+#     future_resv = st.session_state.get("future_resv")
+#     if not future_resv:  # 처리 중인 예약이 없으면 바로 종료
+#         return
+
+#     if not future_resv.done():  # 아직 끝나지 않았으면 잠깐만 스피너로 표시
+#         with st.spinner("예약 처리 중…"):
+#             time.sleep(0.1)  # 0.1초 정도면 렌더링 부하 거의 없음
+#         return
+
+#     # 여기까지 왔으면 작업이 끝난 상태이므로 결과·예외를 꺼낸다
+#     exc = future_resv.exception()
+#     if exc:
+#         st.error(f"예약 처리 중 오류: {exc}")
+#     else:
+#         st.success("예약이 성공적으로 처리됐습니다!")
+
+#     # 한 번 표시했으면 세션 상태에서 제거해서 다음 렌더링 땐 안 보이게
+#     del st.session_state["future_resv"]
+
+
+# reservation_error = st.session_state.get("reservation_error")
+# if reservation_error:  # 처리 중인 예약이 없으면 바로 종료
+#     st.error(reservation_error)
+#     del st.session_state["reservation_error"]
 
 
 def init_page():
@@ -317,13 +311,14 @@ def main_page():
 
                 applicant_email = st.text_input(
                     label="신청자 이메일을 입력하세요",
-                    value="heyjin337@gmail.com",
+                    value="minjigobi@gmail.com",
                     disabled=st.session_state.get("form_submitted", False),
                 )
 
                 submitted = st.form_submit_button(
                     label="신청하기",
-                    disabled=st.session_state.get("form_submitted", False),
+                    disabled=st.session_state.get("locked", False),
+                    on_click=lambda: st.session_state.update(locked=True),
                 )
                 if submitted:
                     email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
@@ -357,17 +352,10 @@ def main_page():
                             f"MCP 서버 연결 실패: {str(mcp_connection_future.exception())}"
                         )
                         return
-                    try:
-                        st.session_state.future_resv = run_async(
-                            resv_agent.make_reservation(application)
-                        )
-                    except Exception as e:
-                        st.error("예약 처리 중 예외 발생: " + str(e))
 
-                    st.success("신청이 완료되었습니다!")
+                    run_async(resv_agent.make_reservation(application))
                     st.rerun()
                 else:
-
                     st.markdown(
                         "🔔문화해설사님이 배정되면 이메일로 알려드립니다.  \n🚨부득이한 사정으로 취소해야 할 경우 방문일 전일까지 배정된 문화해설사님의 이메일로 통지 부탁드립니다."
                     )

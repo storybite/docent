@@ -7,23 +7,21 @@ from anthropic import Anthropic
 
 
 @st.cache_resource
-def init_async_runtime():
+def _get_loop():
     loop = asyncio.new_event_loop()
     th = threading.Thread(target=loop.run_forever, daemon=True)
     th.start()
     return loop
 
 
-loop = init_async_runtime()
-
-
 def run_async(coro):
-    fut = asyncio.run_coroutine_threadsafe(coro, loop)
-    return fut.result()
+    loop = _get_loop()
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return future.result()
 
 
 @st.cache_resource
-def init_course_client():
+def get_course_resource():
     async def _connect():
         client = CourseClient()
         await client.connect_server()
@@ -33,7 +31,7 @@ def init_course_client():
     return run_async(_connect()), Anthropic()
 
 
-course_client, anthropic_client = init_course_client()
+course_client, anthropic_client = get_course_resource()
 
 
 def call_llm(messages: list):
