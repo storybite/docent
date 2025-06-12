@@ -37,7 +37,7 @@ weather_url = f"https://server.smithery.ai/@isdaniel/mcp_weather_server/mcp?conf
 config = {
     "mcpServers": {
         "slack": {"url": slack_url, "transport": "streamable-http"},
-        "weather": {"url": weather_url, "transport": "streamable-http"},
+        # "weather": {"url": weather_url, "transport": "streamable-http"},
     }
 }
 
@@ -47,6 +47,7 @@ application_template = """
 ⏰ 방문시간: {visit_hours}
 👥 방문인원: {visitors}
 🕒 신청일시: {application_time}
+🕒 신청자번호: {applicant_number}
 """.strip()
 
 
@@ -70,6 +71,7 @@ def modify_input_schema(input_schema):
 
 class Report(BaseModel):
     is_success: bool = Field(description="예약 성공 여부")
+    failure_message: Optional[str] = Field(description="예약 실패 사유")
     thread_ts: str = Field(description="스레드의 timestamp")
     channel_id: str = Field(description="스레드가 있는 채널의 id")
     docent_name: Optional[str] = Field(description="예약된 경우 도슨트의 이름")
@@ -130,6 +132,7 @@ class ReservationAgent:
             tools=self.tools,
             tool_system_prompt=slackbot_system_prompt,
         )
+        logger.info(f"\n\n<<ReAct message>>\n{response.content[0].text}\n\n")
         return response
 
     async def _polling_result(
@@ -217,7 +220,7 @@ class ReservationAgent:
             if slackbot_response["is_success"]:
                 send_success_mail(application_form, receiver, slackbot_response)
             else:
-                send_fail_mail(receiver)
+                send_fail_mail(receiver, slackbot_response["failure_message"])
         except Exception as e:
             logger.error(f"메일 전송 실패: {e}")
             traceback.print_exc()

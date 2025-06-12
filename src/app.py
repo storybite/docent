@@ -9,7 +9,7 @@ from reservation.reservation_agent import ReservationAgent
 from llm import DocentBot
 
 import logging
-from utils import setup_logging, logger
+from utils import setup_logging, logger, email_to_6digit_hash
 
 setup_logging()
 
@@ -333,6 +333,7 @@ def main_page():
                         "visit_hours": visit_hours,
                         "visitors": visitors,
                         "applicant_email": applicant_email,
+                        "applicant_number": email_to_6digit_hash(applicant_email),
                         "application_time": datetime.datetime.now().strftime(
                             "%Y.%m.%d %H:%M:%S.%f"
                         ),

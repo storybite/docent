@@ -6,6 +6,7 @@ from pydantic import Field, BaseModel
 from typing import Optional
 import logging
 from pathlib import Path
+import hashlib
 
 
 project_root = Path(__file__).parents[2]
@@ -30,6 +31,13 @@ def get_base64_data(file_path):
     img.save(buffer, format=img.format or "JPEG")  # 원본 포맷 유지 또는 JPEG 기본값
     base64_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
     return base64_data
+
+
+def email_to_6digit_hash(email: str) -> str:
+    sha_hash = hashlib.sha256(email.encode()).hexdigest()
+    hash_int = int(sha_hash, 16)
+    six_digit_hash = hash_int % 1000000
+    return f"{six_digit_hash:06}"
 
 
 LOG_FILENAME = "docent_bot.log"

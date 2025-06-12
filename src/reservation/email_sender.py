@@ -21,10 +21,13 @@ email_success_template = """
 """.strip()
 
 email_fail_template = """
-문화해설사 예약이 실패했습니다. 담당자가 확인 후 메일 드리겠습니다.
-불편을 끼친 점 양해 부탁드립니다.
+안녕하세요? 문화해설 예약 프로그램 관리자입니다.
 
-감사합니다.
+다음의 사유로 문화해설 프로그램 예약이 실패했습니다. 
+
+🔴 실패 사유: {failure_message}
+
+추가적인 문의사항 있으시면 이 메일 주소로 [답장] 부탁드립니다.
 """.strip()
 
 
@@ -59,8 +62,8 @@ def send_success_mail(application_form: str, receiver: str, bot_response: dict):
     send_mail(sender, receiver, cc, subject, body)
 
 
-def send_fail_mail(receiver: str):
-    body = email_fail_template
+def send_fail_mail(receiver: str, failure_message: str):
+    body = email_fail_template.format(failure_message=failure_message)
     sender = os.getenv("sender_email")
     subject = "문화해설사 예약이 실패했습니다."
     cc = os.getenv("manager_email")
